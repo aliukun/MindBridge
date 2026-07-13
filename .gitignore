@@ -1,0 +1,42 @@
+# Python virtual environments
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Test and coverage output
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Runtime data
+data/
+target/
+dist/
+uploads/
+
+# Local databases and generated reports
+*.db
+*.sqlite
+*.sqlite3
+*.xlsx
+*.log
+
+# Local AI model files
+*.gguf
+*.safetensors
+*.bin
+
+# IDE and operating system
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
