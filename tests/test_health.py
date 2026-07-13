@@ -22,7 +22,7 @@ class HealthEndpointTests(unittest.TestCase):
         self.assertEqual(body["version"], "0.1.0")
         self.assertEqual(body["environment"], "development")
 
-    def test_unkown_path_returns_not_found(self):
+    def test_unknown_path_returns_not_found(self):
         response = self.client.get("/not-found")
 
         self.assertEqual(response.status_code, 404)
