@@ -13,9 +13,13 @@ class SettingsTests(unittest.TestCase):
             settings = Settings(_env_file = None)
 
         self.assertEqual(settings.app_name, "MindBridge Learn")
-        self.assertEqual(settings.app_version, "0.1.0")
+        self.assertEqual(settings.app_version, "0.2.0")
         self.assertEqual(settings.environment, "development")
         self.assertEqual(settings.server_port, 8000)
+        self.assertEqual(
+            settings.database_url,
+            "sqlite:///./data/mindbridge.db",
+        )
 
     def test_environment_variables_override_defaults(self):
         """系统环境变量应当能够覆盖默认配置。"""
@@ -25,6 +29,7 @@ class SettingsTests(unittest.TestCase):
             {
                 "APP_NAME": "MindBridge Test",
                 "SERVER_PORT": "9090",
+                "DATABASE_URL": "sqlite:///./data/test.db",
             },
             clear=True,
         ):
@@ -32,6 +37,10 @@ class SettingsTests(unittest.TestCase):
 
         self.assertEqual(settings.app_name, "MindBridge Test")
         self.assertEqual(settings.server_port, 9090)
+        self.assertEqual(
+            settings.database_url,
+            "sqlite:///./data/test.db",
+        )
 
 if __name__ == "__main__":
     unittest.main()
