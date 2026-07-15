@@ -1,7 +1,7 @@
 from collections.abc import Generator
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -39,6 +39,13 @@ def build_engine(database_url: str) -> Engine:
     _ensure_sqlite_directory(database_url)
 
     if database_url.startswith("sqlite"):
+        if ":memory:" in database_url:
+            return create_engine(
+                database_url,
+                connect_args={"check_same_thread": False},
+                poolclass=StaticPool,
+            )
+
         return create_engine(
             database_url,
             connect_args={"check_same_thread": False},

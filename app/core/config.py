@@ -1,25 +1,30 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 class Settings(BaseSettings):
-    """MindBridge 集中配置
-
-    配置优先从系统环境变量和项目根目录的 .env 文件读取；
-    如果没有配置，则使用这里定义的默认值。
-    """
+    """MindBridge 集中配置"""
 
     app_name: str = "MindBridge Learn"
-    app_version: str = "0.2.0"
+    app_version: str = "0.3.0"
     environment: str = "development"
 
     server_host: str = "127.0.0.1"
     server_port: int = 8000
 
     database_url: str = "sqlite:///./data/mindbridge.db"
+
+    bootstrap_student_username: str = "student"
+    bootstrap_student_display_name: str = "Student"
+    bootstrap_student_password: SecretStr | None = None
+
+    bootstrap_admin_username: str = "admin"
+    bootstrap_admin_display_name: str = "Administrator"
+    bootstrap_admin_password: SecretStr | None = None
 
     model_config = SettingsConfigDict(
         env_file = PROJECT_ROOT / ".env",

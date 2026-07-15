@@ -4,14 +4,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.routes import router
-from app.core.bootstrap import create_schema
+from app.core.bootstrap import create_schema, bootstrap_database
 from app.core.config import get_settings
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     """管理应用启动和关闭期间需要执行的操作"""
 
-    create_schema()
+    bootstrap_database()
 
     yield
 

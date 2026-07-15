@@ -5,9 +5,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 
+ROLE_USER = "ROLE_USER"
+ROLE_ADMIN = "ROLE_ADMIN"
 
 class UserAccount(Base):
-    """系统用户账户。"""
+    """系统用户账户"""
 
     __tablename__ = "user_accounts"
 
@@ -31,7 +33,7 @@ class UserAccount(Base):
 
     roles_csv: Mapped[str] = mapped_column(
         String(256),
-        default="ROLE_USER",
+        default=ROLE_USER,
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -41,7 +43,7 @@ class UserAccount(Base):
 
     @property
     def roles(self) -> list[str]:
-        """把数据库中的逗号分隔角色转换成 Python 列表。"""
+        """把数据库中的逗号分隔角色转换成 Python 列表"""
 
         return [
             role
@@ -50,7 +52,18 @@ class UserAccount(Base):
         ]
 
     @roles.setter
-    def roles(self, value: list[str] | set[str]) -> None:
-        """把 Python 角色集合转换成数据库字符串。"""
+    def roles(
+            self,
+            value: list[str] | set[str],
+    ) -> None:
+        """清理、排序并保存角色"""
 
-        self.roles_csv = ",".join(sorted(value))
+        cleaned_roles = {
+            role.strip()
+            for role in value
+            if role.strip()
+        }
+
+        self.roles_csv = ",".join(
+            sorted(cleaned_roles)
+        )
