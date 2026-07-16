@@ -49,6 +49,8 @@
 
 ## v0.4.0：聊天数据基础
 
+状态：已完成
+
 - ChatSession 实体
 - ChatMessage 实体
 - 创建会话

@@ -1,11 +1,11 @@
 import unittest
 
-from sqlalchemy import inspect, select
+from sqlalchemy import inspect, select, func
 from sqlalchemy.orm import sessionmaker
 
 from app.core.bootstrap import create_schema
 from app.core.database import build_engine, Base
-from app.models.entities import UserAccount
+from app.models.entities import UserAccount, ChatSession, ChatMessage
 
 
 class DatabaseTests(unittest.TestCase):
@@ -29,12 +29,18 @@ class DatabaseTests(unittest.TestCase):
         Base.metadata.drop_all(bind = self.engine)
         self.engine.dispose()
 
-    def test_create_schema_creates_user_accounts_table(self):
-        """建表函数应创建 user_accounts 表"""
+    def test_create_schema_creates_required_tables(self):
+        """建表函数应创建用户、会话和消息表"""
 
-        table_names = inspect(self.engine).get_table_names()
+        table_names = set(inspect(self.engine).get_table_names())
 
-        self.assertIn("user_accounts", table_names)
+        self.assertTrue(
+            {
+                "user_accounts",
+                "chat_sessions",
+                "chat_messages",
+            }.issubset(table_names)
+        )
 
     def test_user_can_be_saved_and_queried(self):
         """UserAccount 应能被写入并重新查询"""
@@ -70,6 +76,50 @@ class DatabaseTests(unittest.TestCase):
                 saved_user.roles,
                 ["ROLE_ADMIN", "ROLE_USER"],
             )
+
+    def test_deleting_user_cascades_sessions_and_messages(self):
+        """删除用户时，其会话和消息也应被删除"""
+
+        with self.SessionTesting() as database:
+            user = UserAccount(
+                username="cascade-user",
+                display_name="Cascade User",
+                password_hash="test-only-hash",
+            )
+
+            chat_session = ChatSession(
+                title="Cascade",
+                user=user,
+            )
+
+            chat_session.messages.append(
+                ChatMessage(
+                    role="user",
+                    content="Hello",
+                )
+            )
+
+            database.add(user)
+            database.commit()
+
+            database.delete(user)
+            database.commit()
+
+            session_count = database.scalar(
+                select(func.count()).select_from(
+                    ChatSession
+                )
+            )
+
+            message_count = database.scalar(
+                select(func.count()).select_from(
+                    ChatMessage
+                )
+            )
+
+            self.assertEqual(session_count, 0)
+            self.assertEqual(message_count, 0)
+
 
 if __name__ == '__main__':
     unittest.main()

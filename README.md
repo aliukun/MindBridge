@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-v0.3.0
+v0.4.0
 
 ## 当前已完成
 
@@ -17,12 +17,18 @@ v0.3.0
 - Argon2id 密码哈希
 - HTTP Basic 身份认证
 - 学生和管理员角色授权
+- ChatSession 聊天会话实体
+- ChatMessage 聊天消息实体
+- 创建聊天会话
+- 保存用户消息
+- 服务层保存助手消息
+- 查询聊天历史
+- 会话所有权隔离
 - unittest 自动测试
 - GitHub Actions
 
 ## 尚未实现
 
-- 聊天会话与消息持久化
 - 心理风险评估
 - AI 模型调用
 - SSE 流式聊天
@@ -76,6 +82,24 @@ GET /api/users/me
 GET /api/admin/ping
 ```
 
+创建聊天会话：
+
+```text
+POST /api/chat/sessions
+```
+
+保存用户消息：
+
+```text
+POST /api/chat/sessions/{session_public_id}/messages
+```
+
+查询聊天历史：
+
+```text
+GET /api/chat/sessions/{session_public_id}/messages
+```
+
 ## 测试
 
 ```powershell
@@ -103,3 +127,7 @@ data/mindbridge.db
 HTTP Basic 只适合当前本地学习阶段。
 
 如果部署到公网，必须使用 HTTPS。
+
+客户端只能创建用户消息，不能自行指定 `assistant` 角色。
+
+用户只能查询和修改属于自己的聊天会话。

@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     """MindBridge 集中配置"""
 
     app_name: str = "MindBridge Learn"
-    app_version: str = "0.3.0"
+    app_version: str = "0.4.0"
     environment: str = "development"
 
     server_host: str = "127.0.0.1"
