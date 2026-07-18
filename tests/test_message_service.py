@@ -9,9 +9,9 @@ from app.core.enums import RiskLevel
 from app.models.entities import (
     MESSAGE_ROLE_ASSISTANT,
     MESSAGE_ROLE_USER,
+    ROLE_USER,
     ChatMessage,
     PsychologicalReport,
-    ROLE_USER,
 )
 from app.services.chat_service import (
     create_chat_message,
@@ -62,9 +62,7 @@ class MessageServiceTests(unittest.TestCase):
             database.commit()
 
     def tearDown(self):
-        Base.metadata.drop_all(
-            bind=self.engine
-        )
+        Base.metadata.drop_all(bind=self.engine)
 
         self.engine.dispose()
 
@@ -73,18 +71,14 @@ class MessageServiceTests(unittest.TestCase):
             result = process_user_message(
                 database,
                 owner=self.owner,
-                session_public_id=(
-                    self.chat_session.public_id
-                ),
+                session_public_id=(self.chat_session.public_id),
                 content="今天课程有点多。",
             )
 
             database.commit()
 
             report_count = database.scalar(
-                select(func.count()).select_from(
-                    PsychologicalReport
-                )
+                select(func.count()).select_from(PsychologicalReport)
             )
 
         self.assertEqual(
@@ -92,9 +86,7 @@ class MessageServiceTests(unittest.TestCase):
             RiskLevel.LOW,
         )
 
-        self.assertIsNone(
-            result.report
-        )
+        self.assertIsNone(result.report)
 
         self.assertEqual(
             report_count,
@@ -106,19 +98,13 @@ class MessageServiceTests(unittest.TestCase):
             result = process_user_message(
                 database,
                 owner=self.owner,
-                session_public_id=(
-                    self.chat_session.public_id
-                ),
-                content=(
-                    "我连续失眠，已经无法正常生活。"
-                ),
+                session_public_id=(self.chat_session.public_id),
+                content=("我连续失眠，已经无法正常生活。"),
             )
 
             database.commit()
 
-        self.assertIsNotNone(
-            result.report
-        )
+        self.assertIsNotNone(result.report)
 
         assert result.report is not None
 
@@ -139,9 +125,7 @@ class MessageServiceTests(unittest.TestCase):
             result = process_user_message(
                 database,
                 owner=self.owner,
-                session_public_id=(
-                    self.chat_session.public_id
-                ),
+                session_public_id=(self.chat_session.public_id),
                 content="我不想活了。",
             )
 
@@ -150,14 +134,10 @@ class MessageServiceTests(unittest.TestCase):
             history = get_chat_history(
                 database,
                 owner=self.owner,
-                session_public_id=(
-                    self.chat_session.public_id
-                ),
+                session_public_id=(self.chat_session.public_id),
             )
 
-        self.assertIsNotNone(
-            result.report
-        )
+        self.assertIsNotNone(result.report)
 
         assert result.report is not None
 
@@ -167,10 +147,7 @@ class MessageServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            [
-                message.role
-                for message in history.messages
-            ],
+            [message.role for message in history.messages],
             ["user"],
         )
 
@@ -181,24 +158,18 @@ class MessageServiceTests(unittest.TestCase):
             process_user_message(
                 database,
                 owner=self.owner,
-                session_public_id=(
-                    self.chat_session.public_id
-                ),
+                session_public_id=(self.chat_session.public_id),
                 content="我不想活了。",
             )
 
             database.rollback()
 
             message_count = database.scalar(
-                select(func.count()).select_from(
-                    ChatMessage
-                )
+                select(func.count()).select_from(ChatMessage)
             )
 
             report_count = database.scalar(
-                select(func.count()).select_from(
-                    PsychologicalReport
-                )
+                select(func.count()).select_from(PsychologicalReport)
             )
 
         self.assertEqual(message_count, 0)
@@ -211,16 +182,12 @@ class MessageServiceTests(unittest.TestCase):
             assistant_message = create_chat_message(
                 database,
                 owner=self.owner,
-                session_public_id=(
-                    self.chat_session.public_id
-                ),
+                session_public_id=(self.chat_session.public_id),
                 role=MESSAGE_ROLE_ASSISTANT,
                 content="Assistant text",
             )
 
-            assessment = assess_psychological_risk(
-                "我连续失眠，已经无法正常生活。"
-            )
+            assessment = assess_psychological_risk("我连续失眠，已经无法正常生活。")
 
             with self.assertRaisesRegex(
                 ValueError,
@@ -233,9 +200,7 @@ class MessageServiceTests(unittest.TestCase):
                 )
 
             report_count = database.scalar(
-                select(func.count()).select_from(
-                    PsychologicalReport
-                )
+                select(func.count()).select_from(PsychologicalReport)
             )
 
         self.assertEqual(
@@ -250,18 +215,12 @@ class MessageServiceTests(unittest.TestCase):
             user_message = create_chat_message(
                 database,
                 owner=self.owner,
-                session_public_id=(
-                    self.chat_session.public_id
-                ),
+                session_public_id=(self.chat_session.public_id),
                 role=MESSAGE_ROLE_USER,
-                content=(
-                    "我连续失眠，已经无法正常生活。"
-                ),
+                content=("我连续失眠，已经无法正常生活。"),
             )
 
-            assessment = assess_psychological_risk(
-                user_message.content
-            )
+            assessment = assess_psychological_risk(user_message.content)
 
             first = create_psychological_report(
                 database,
@@ -278,9 +237,7 @@ class MessageServiceTests(unittest.TestCase):
             database.commit()
 
             report_count = database.scalar(
-                select(func.count()).select_from(
-                    PsychologicalReport
-                )
+                select(func.count()).select_from(PsychologicalReport)
             )
 
         self.assertIs(first, second)

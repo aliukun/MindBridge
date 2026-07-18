@@ -1,20 +1,31 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, require_admin
-
 from app.core.config import get_settings
 from app.core.database import get_db
+from app.core.errors import AppError, ErrorCode
 from app.models.entities import UserAccount
-from app.schemas.chat import ChatHistoryPublic, ChatMessageCreate, ChatMessagePublic, ChatSessionCreate, ChatSessionPublic
+from app.schemas.chat import (
+    ChatHistoryPublic,
+    ChatMessageCreate,
+    ChatMessagePublic,
+    ChatSessionCreate,
+    ChatSessionPublic,
+)
 from app.schemas.users import UserPublic
-from app.services.chat_service import ChatSessionNotFoundError, create_chat_message, create_chat_session, get_chat_history
+from app.services.chat_service import (
+    ChatSessionNotFoundError,
+    create_chat_session,
+    get_chat_history,
+)
 from app.services.message_service import process_user_message
 
 router = APIRouter()
+
 
 @router.get("/actuator/health")
 def health() -> dict[str, str]:
@@ -28,6 +39,7 @@ def health() -> dict[str, str]:
         "version": settings.app_version,
         "environment": settings.environment,
     }
+
 
 @router.get(
     "/api/users/me",
@@ -43,6 +55,7 @@ def read_current_user(
 
     return current_user
 
+
 @router.get("/api/admin/ping")
 def admin_ping(
     current_admin: Annotated[
@@ -56,6 +69,7 @@ def admin_ping(
         "status": "ADMIN_OK",
         "username": current_admin.username,
     }
+
 
 @router.post(
     "/api/chat/sessions",
@@ -123,17 +137,16 @@ def save_user_message(
     except ChatSessionNotFoundError as error:
         database.rollback()
 
-        raise HTTPException(
+        raise AppError(
             status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.CHAT_SESSION_NOT_FOUND,
             detail="Chat session not found.",
         ) from error
     except Exception:
         database.rollback()
         raise
 
-    database.refresh(
-        result.user_message
-    )
+    database.refresh(result.user_message)
 
     return result.user_message
 
@@ -162,17 +175,15 @@ def read_chat_history(
             session_public_id=session_public_id,
         )
     except ChatSessionNotFoundError as error:
-        raise HTTPException(
+        raise AppError(
             status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.CHAT_SESSION_NOT_FOUND,
             detail="Chat session not found.",
         ) from error
 
     return ChatHistoryPublic(
-        session=ChatSessionPublic.model_validate(
-            history.session
-        ),
+        session=ChatSessionPublic.model_validate(history.session),
         messages=[
-            ChatMessagePublic.model_validate(message)
-            for message in history.messages
+            ChatMessagePublic.model_validate(message) for message in history.messages
         ],
     )

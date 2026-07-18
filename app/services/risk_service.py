@@ -1,8 +1,7 @@
-from dataclasses import dataclass
 import unicodedata
+from dataclasses import dataclass
 
 from app.core.enums import RiskLevel
-
 
 RISK_RULE_VERSION = "keyword_rule_v1"
 
@@ -107,10 +106,7 @@ def _matched_signal_groups(
     return tuple(
         group_name
         for group_name, phrases in groups.items()
-        if any(
-            phrase.casefold() in normalized_text
-            for phrase in phrases
-        )
+        if any(phrase.casefold() in normalized_text for phrase in phrases)
     )
 
 
@@ -123,13 +119,13 @@ def assess_psychological_risk(
         unicodedata.normalize(
             "NFKC",
             text,
-        ).casefold().split()
+        )
+        .casefold()
+        .split()
     )
 
     if not normalized_text:
-        raise ValueError(
-            "Text to assess must not be blank."
-        )
+        raise ValueError("Text to assess must not be blank.")
 
     high_signals = _matched_signal_groups(
         normalized_text,
@@ -141,8 +137,7 @@ def assess_psychological_risk(
             risk_level=RiskLevel.HIGH,
             matched_signals=high_signals,
             summary=(
-                "检测到需要立即进行安全确认的表达；"
-                "此结果是安全分流，不是临床诊断。"
+                "检测到需要立即进行安全确认的表达；此结果是安全分流，不是临床诊断。"
             ),
             rule_version=RISK_RULE_VERSION,
         )
@@ -156,19 +151,13 @@ def assess_psychological_risk(
         return PsychologicalAssessment(
             risk_level=RiskLevel.MEDIUM,
             matched_signals=medium_signals,
-            summary=(
-                "检测到较强或持续困扰的表达，"
-                "建议尽快由现实中的人提供支持。"
-            ),
+            summary=("检测到较强或持续困扰的表达，建议尽快由现实中的人提供支持。"),
             rule_version=RISK_RULE_VERSION,
         )
 
     return PsychologicalAssessment(
         risk_level=RiskLevel.LOW,
         matched_signals=(),
-        summary=(
-            "当前硬规则未检测到中高风险信号；"
-            "这不代表风险一定不存在。"
-        ),
+        summary=("当前硬规则未检测到中高风险信号；这不代表风险一定不存在。"),
         rule_version=RISK_RULE_VERSION,
     )

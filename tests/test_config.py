@@ -2,6 +2,8 @@ import os
 import unittest
 from unittest.mock import patch
 
+from pydantic import ValidationError
+
 from app.core.config import Settings
 
 
@@ -12,9 +14,7 @@ class SettingsTests(unittest.TestCase):
             {},
             clear=True,
         ):
-            settings = Settings(
-                _env_file=None
-            )
+            settings = Settings(_env_file=None)
 
         self.assertEqual(
             settings.app_name,
@@ -23,12 +23,17 @@ class SettingsTests(unittest.TestCase):
 
         self.assertEqual(
             settings.app_version,
-            "0.5.0",
+            "0.6.0",
         )
 
         self.assertEqual(
             settings.environment,
             "development",
+        )
+
+        self.assertEqual(
+            settings.log_level,
+            "INFO",
         )
 
         self.assertEqual(
@@ -41,13 +46,9 @@ class SettingsTests(unittest.TestCase):
             "sqlite:///./data/mindbridge.db",
         )
 
-        self.assertIsNone(
-            settings.bootstrap_student_password
-        )
+        self.assertIsNone(settings.bootstrap_student_password)
 
-        self.assertIsNone(
-            settings.bootstrap_admin_password
-        )
+        self.assertIsNone(settings.bootstrap_admin_password)
 
     def test_environment_variables_override_defaults(self):
         with patch.dict(
@@ -55,18 +56,13 @@ class SettingsTests(unittest.TestCase):
             {
                 "APP_NAME": "MindBridge Test",
                 "SERVER_PORT": "9090",
-                "DATABASE_URL": (
-                    "sqlite:///./data/test.db"
-                ),
-                "BOOTSTRAP_STUDENT_PASSWORD": (
-                    "student-password-2026"
-                ),
+                "DATABASE_URL": ("sqlite:///./data/test.db"),
+                "LOG_LEVEL": "ERROR",
+                "BOOTSTRAP_STUDENT_PASSWORD": ("student-password-2026"),
             },
             clear=True,
         ):
-            settings = Settings(
-                _env_file=None
-            )
+            settings = Settings(_env_file=None)
 
         self.assertEqual(
             settings.app_name,
@@ -83,21 +79,30 @@ class SettingsTests(unittest.TestCase):
             "sqlite:///./data/test.db",
         )
 
-        self.assertIsNotNone(
-            settings.bootstrap_student_password
+        self.assertEqual(
+            settings.log_level,
+            "ERROR",
         )
 
-        assert (
-            settings.bootstrap_student_password
-            is not None
-        )
+        self.assertIsNotNone(settings.bootstrap_student_password)
+
+        assert settings.bootstrap_student_password is not None
 
         self.assertEqual(
-            settings
-            .bootstrap_student_password
-            .get_secret_value(),
+            settings.bootstrap_student_password.get_secret_value(),
             "student-password-2026",
         )
+
+    def test_unknown_log_level_is_rejected(self):
+        with patch.dict(
+            os.environ,
+            {
+                "LOG_LEVEL": "VERBOSE",
+            },
+            clear=True,
+        ):
+            with self.assertRaises(ValidationError):
+                Settings(_env_file=None)
 
 
 if __name__ == "__main__":

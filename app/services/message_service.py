@@ -3,7 +3,12 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.models.entities import ChatMessage, PsychologicalReport, UserAccount, MESSAGE_ROLE_USER
+from app.models.entities import (
+    MESSAGE_ROLE_USER,
+    ChatMessage,
+    PsychologicalReport,
+    UserAccount,
+)
 from app.services.chat_service import create_chat_message
 from app.services.report_service import create_psychological_report
 from app.services.risk_service import PsychologicalAssessment, assess_psychological_risk
@@ -17,12 +22,13 @@ class ProcessedUserMessage:
     assessment: PsychologicalAssessment
     report: PsychologicalReport | None
 
+
 def process_user_message(
-        database: Session,
-        *,
-        owner: UserAccount,
-        session_public_id: str | UUID,
-        content: str,
+    database: Session,
+    *,
+    owner: UserAccount,
+    session_public_id: str | UUID,
+    content: str,
 ) -> ProcessedUserMessage:
     """保存用户消息、执行硬规则并创建必要的后台报告"""
 
@@ -34,9 +40,7 @@ def process_user_message(
         content=content,
     )
 
-    assessment = assess_psychological_risk(
-        user_message.content
-    )
+    assessment = assess_psychological_risk(user_message.content)
 
     report = create_psychological_report(
         database,

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import DateTime, String, func, ForeignKey, CheckConstraint, Text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -14,15 +14,18 @@ ROLE_ADMIN = "ROLE_ADMIN"
 MESSAGE_ROLE_USER = "user"
 MESSAGE_ROLE_ASSISTANT = "assistant"
 
+
 def utc_now() -> datetime:
     """返回当前 UTC 时间"""
 
     return datetime.now(timezone.utc)
 
+
 def new_public_id() -> str:
     """生成可以安全暴露给客户端的随机 UUID"""
 
     return str(uuid4())
+
 
 class UserAccount(Base):
     """系统用户账户"""
@@ -60,43 +63,33 @@ class UserAccount(Base):
     sessions: Mapped[list[ChatSession]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
     @property
     def roles(self) -> list[str]:
         """把数据库中的逗号分隔角色转换成 Python 列表"""
 
-        return [
-            role
-            for role in (self.roles_csv or "").split(",")
-            if role
-        ]
+        return [role for role in (self.roles_csv or "").split(",") if role]
 
     @roles.setter
     def roles(
-            self,
-            value: list[str] | set[str],
+        self,
+        value: list[str] | set[str],
     ) -> None:
         """清理、排序并保存角色"""
 
-        cleaned_roles = {
-            role.strip()
-            for role in value
-            if role.strip()
-        }
+        cleaned_roles = {role.strip() for role in value if role.strip()}
 
-        self.roles_csv = ",".join(
-            sorted(cleaned_roles)
-        )
+        self.roles_csv = ",".join(sorted(cleaned_roles))
+
 
 class ChatSession(Base):
     """一次聊天会话，并且只属于一个用户"""
 
     __tablename__ = "chat_sessions"
 
-    id: Mapped[int] = mapped_column(
-        primary_key=True
-    )
+    id: Mapped[int] = mapped_column(primary_key=True)
 
     public_id: Mapped[str] = mapped_column(
         String(36),
@@ -106,13 +99,14 @@ class ChatSession(Base):
     )
 
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("user_accounts.id"),
+        ForeignKey(
+            "user_accounts.id",
+            ondelete="CASCADE",
+        ),
         index=True,
     )
 
-    title: Mapped[str] = mapped_column(
-        String(160)
-    )
+    title: Mapped[str] = mapped_column(String(160))
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -131,13 +125,15 @@ class ChatSession(Base):
     messages: Mapped[list[ChatMessage]] = relationship(
         back_populates="session",
         cascade="all, delete-orphan",
-        order_by="ChatMessage.id"
+        passive_deletes=True,
+        order_by="ChatMessage.id",
     )
 
     def touch(self) -> None:
         """有新消息时更新会话的最后修改时间"""
 
         self.updated_at = utc_now()
+
 
 class ChatMessage(Base):
     """聊天会话中的一条用户消息或助手消息"""
@@ -156,13 +152,14 @@ class ChatMessage(Base):
     )
 
     session_id: Mapped[int] = mapped_column(
-        ForeignKey("chat_sessions.id"),
+        ForeignKey(
+            "chat_sessions.id",
+            ondelete="CASCADE",
+        ),
         index=True,
     )
 
-    role: Mapped[str] = mapped_column(
-        String(16)
-    )
+    role: Mapped[str] = mapped_column(String(16))
 
     content: Mapped[str] = mapped_column(
         Text,
@@ -177,13 +174,13 @@ class ChatMessage(Base):
         back_populates="messages",
     )
 
-    assessment_report: Mapped[
-        PsychologicalReport | None
-    ] = relationship(
+    assessment_report: Mapped[PsychologicalReport | None] = relationship(
         back_populates="message",
         cascade="all, delete-orphan",
+        passive_deletes=True,
         uselist=False,
     )
+
 
 class PsychologicalReport(Base):
     """中、高风险消息对应的后台心理安全报告。"""
@@ -202,7 +199,10 @@ class PsychologicalReport(Base):
     )
 
     message_id: Mapped[int] = mapped_column(
-        ForeignKey("chat_messages.id"),
+        ForeignKey(
+            "chat_messages.id",
+            ondelete="CASCADE",
+        ),
         unique=True,
         index=True,
     )
@@ -238,11 +238,7 @@ class PsychologicalReport(Base):
     def matched_signals(self) -> list[str]:
         """把逗号分隔的信号类别转换成列表。"""
 
-        return [
-            signal
-            for signal in self.matched_signals_csv.split(",")
-            if signal
-        ]
+        return [signal for signal in self.matched_signals_csv.split(",") if signal]
 
     @matched_signals.setter
     def matched_signals(
@@ -251,12 +247,6 @@ class PsychologicalReport(Base):
     ) -> None:
         """清理、去重并持久化信号类别。"""
 
-        cleaned_signals = {
-            signal.strip()
-            for signal in value
-            if signal.strip()
-        }
+        cleaned_signals = {signal.strip() for signal in value if signal.strip()}
 
-        self.matched_signals_csv = ",".join(
-            sorted(cleaned_signals)
-        )
+        self.matched_signals_csv = ",".join(sorted(cleaned_signals))

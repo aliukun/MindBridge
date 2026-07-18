@@ -31,9 +31,7 @@ class ChatSessionCreate(BaseModel):
         normalized = value.strip()
 
         if not normalized:
-            raise ValueError(
-                "Title must not be blank."
-            )
+            raise ValueError("Title must not be blank.")
 
         return normalized
 
@@ -59,9 +57,7 @@ class ChatMessageCreate(BaseModel):
         normalized = value.strip()
 
         if not normalized:
-            raise ValueError(
-                "Message content must not be blank."
-            )
+            raise ValueError("Message content must not be blank.")
 
         return normalized
 

@@ -55,8 +55,7 @@ class AuthenticationTests(unittest.TestCase):
 
         self.application = create_app()
 
-        def override_get_db(
-        ) -> Generator[Session, None, None]:
+        def override_get_db() -> Generator[Session, None, None]:
             database = self.SessionTesting()
 
             try:
@@ -64,29 +63,21 @@ class AuthenticationTests(unittest.TestCase):
             finally:
                 database.close()
 
-        self.application.dependency_overrides[
-            get_db
-        ] = override_get_db
+        self.application.dependency_overrides[get_db] = override_get_db
 
-        self.client = TestClient(
-            self.application
-        )
+        self.client = TestClient(self.application)
 
     def tearDown(self):
         self.client.close()
 
         self.application.dependency_overrides.clear()
 
-        Base.metadata.drop_all(
-            bind=self.engine
-        )
+        Base.metadata.drop_all(bind=self.engine)
 
         self.engine.dispose()
 
     def test_missing_credentials_returns_401(self):
-        response = self.client.get(
-            "/api/users/me"
-        )
+        response = self.client.get("/api/users/me")
 
         self.assertEqual(
             response.status_code,

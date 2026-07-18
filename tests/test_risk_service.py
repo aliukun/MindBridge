@@ -10,22 +10,16 @@ from app.services.risk_service import (
 
 class RiskServiceTests(unittest.TestCase):
     def test_ordinary_stress_is_low(self):
-        result = assess_psychological_risk(
-            "这周考试有点紧张。"
-        )
+        result = assess_psychological_risk("这周考试有点紧张。")
 
         self.assertEqual(
             result.risk_level,
             RiskLevel.LOW,
         )
 
-        self.assertFalse(
-            result.needs_support
-        )
+        self.assertFalse(result.needs_support)
 
-        self.assertFalse(
-            result.immediate_support
-        )
+        self.assertFalse(result.immediate_support)
 
         self.assertEqual(
             result.matched_signals,
@@ -33,22 +27,16 @@ class RiskServiceTests(unittest.TestCase):
         )
 
     def test_persistent_distress_is_medium(self):
-        result = assess_psychological_risk(
-            "我连续失眠，已经无法正常生活。"
-        )
+        result = assess_psychological_risk("我连续失眠，已经无法正常生活。")
 
         self.assertEqual(
             result.risk_level,
             RiskLevel.MEDIUM,
         )
 
-        self.assertTrue(
-            result.needs_support
-        )
+        self.assertTrue(result.needs_support)
 
-        self.assertFalse(
-            result.immediate_support
-        )
+        self.assertFalse(result.immediate_support)
 
         self.assertIn(
             "FUNCTIONAL_IMPAIRMENT",
@@ -56,18 +44,14 @@ class RiskServiceTests(unittest.TestCase):
         )
 
     def test_explicit_self_harm_signal_is_high(self):
-        result = assess_psychological_risk(
-            "我不想活了，也想伤害自己。"
-        )
+        result = assess_psychological_risk("我不想活了，也想伤害自己。")
 
         self.assertEqual(
             result.risk_level,
             RiskLevel.HIGH,
         )
 
-        self.assertTrue(
-            result.immediate_support
-        )
+        self.assertTrue(result.immediate_support)
 
         self.assertIn(
             "SELF_HARM_OR_SUICIDE",
@@ -82,9 +66,7 @@ class RiskServiceTests(unittest.TestCase):
     def test_english_matching_normalizes_width_and_case(
         self,
     ):
-        result = assess_psychological_risk(
-            "Ｉ ＷＡＮＴ ＴＯ ＤＩＥ。"
-        )
+        result = assess_psychological_risk("Ｉ ＷＡＮＴ ＴＯ ＤＩＥ。")
 
         self.assertEqual(
             result.risk_level,
@@ -94,9 +76,7 @@ class RiskServiceTests(unittest.TestCase):
     def test_high_rule_has_priority_over_medium_rule(
         self,
     ):
-        result = assess_psychological_risk(
-            "我长期失眠，而且现在不想活了。"
-        )
+        result = assess_psychological_risk("我长期失眠，而且现在不想活了。")
 
         self.assertEqual(
             result.risk_level,
@@ -105,16 +85,12 @@ class RiskServiceTests(unittest.TestCase):
 
     def test_blank_text_is_rejected(self):
         with self.assertRaises(ValueError):
-            assess_psychological_risk(
-                "   "
-            )
+            assess_psychological_risk("   ")
 
     def test_high_result_is_non_diagnostic_backend_metadata(
         self,
     ):
-        result = assess_psychological_risk(
-            "我想伤害自己。"
-        )
+        result = assess_psychological_risk("我想伤害自己。")
 
         self.assertIn(
             "安全确认",

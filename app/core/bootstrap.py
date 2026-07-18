@@ -2,20 +2,22 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.core.database import Base, engine, SessionLocal
+from app.core.database import SessionLocal, engine
+from app.core.schema import ensure_schema
 from app.models import entities  # noqa: F401
-from app.models.entities import ROLE_USER, ROLE_ADMIN
+from app.models.entities import ROLE_ADMIN, ROLE_USER
 from app.services.user_service import ensure_user
 
 
 def create_schema(bind: Engine = engine) -> None:
-    """创建当前尚不存在的数据库表。"""
+    """为空库建表，或只读确认已有结构兼容。"""
 
-    Base.metadata.create_all(bind=bind)
+    ensure_schema(bind)
+
 
 def initialize_users(
-        database: Session,
-        settings: Settings,
+    database: Session,
+    settings: Settings,
 ) -> None:
     """根据配置创建初始学生和管理员"""
 
@@ -34,7 +36,7 @@ def initialize_users(
         ),
     )
 
-    for (username, display_name, secret, roles) in user_specs:
+    for username, display_name, secret, roles in user_specs:
         if secret is None:
             continue
 
@@ -50,6 +52,7 @@ def initialize_users(
             password=password,
             roles=roles,
         )
+
 
 def bootstrap_database() -> None:
     """建表并初始化配置中启用的用户"""

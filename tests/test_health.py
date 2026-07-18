@@ -5,6 +5,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
+from app.core.errors import REQUEST_ID_HEADER
 from app.main import app
 
 
@@ -23,16 +24,17 @@ class HealthEndpointTests(unittest.TestCase):
             {},
             clear=True,
         ):
-            settings = Settings(
-                _env_file=None
-            )
+            settings = Settings(_env_file=None)
 
         with patch(
             "app.api.routes.get_settings",
             return_value=settings,
         ):
             response = self.client.get(
-                "/actuator/health"
+                "/actuator/health",
+                headers={
+                    REQUEST_ID_HEADER: ("health-check-request"),
+                },
             )
 
         self.assertEqual(
@@ -54,7 +56,7 @@ class HealthEndpointTests(unittest.TestCase):
 
         self.assertEqual(
             body["version"],
-            "0.5.0",
+            "0.6.0",
         )
 
         self.assertEqual(
@@ -62,10 +64,13 @@ class HealthEndpointTests(unittest.TestCase):
             "development",
         )
 
-    def test_unknown_path_returns_not_found(self):
-        response = self.client.get(
-            "/not-found"
+        self.assertEqual(
+            response.headers[REQUEST_ID_HEADER],
+            "health-check-request",
         )
+
+    def test_unknown_path_returns_not_found(self):
+        response = self.client.get("/not-found")
 
         self.assertEqual(
             response.status_code,

@@ -4,8 +4,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.routes import router
-from app.core.bootstrap import create_schema, bootstrap_database
+from app.core.bootstrap import bootstrap_database
 from app.core.config import get_settings
+from app.core.errors import (
+    RequestIdMiddleware,
+    register_exception_handlers,
+)
+from app.core.logging import configure_logging
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -15,19 +21,27 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
     yield
 
+
 def create_app() -> FastAPI:
     """创建并配置一个 FastAPI 应用实例"""
 
     settings = get_settings()
 
+    configure_logging(settings)
+
     application = FastAPI(
-        title = settings.app_name,
-        version = settings.app_version,
-        lifespan = lifespan,
+        title=settings.app_name,
+        version=settings.app_version,
+        lifespan=lifespan,
     )
+
+    application.add_middleware(RequestIdMiddleware)
+
+    register_exception_handlers(application)
 
     application.include_router(router)
 
     return application
+
 
 app = create_app()

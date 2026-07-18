@@ -40,12 +40,8 @@ class BootstrapTests(unittest.TestCase):
         ):
             settings = Settings(
                 _env_file=None,
-                bootstrap_student_password=(
-                    "student-password-2026"
-                ),
-                bootstrap_admin_password=(
-                    "admin-password-2026"
-                ),
+                bootstrap_student_password=("student-password-2026"),
+                bootstrap_admin_password=("admin-password-2026"),
             )
 
         with self.SessionTesting() as database:
@@ -54,20 +50,13 @@ class BootstrapTests(unittest.TestCase):
             database.commit()
 
         with self.SessionTesting() as database:
-            statement = select(
-                UserAccount
-            ).order_by(UserAccount.username)
+            statement = select(UserAccount).order_by(UserAccount.username)
 
-            users = database.scalars(
-                statement
-            ).all()
+            users = database.scalars(statement).all()
 
         self.assertEqual(len(users), 2)
 
-        users_by_name = {
-            user.username: user
-            for user in users
-        }
+        users_by_name = {user.username: user for user in users}
 
         student = users_by_name["student"]
         admin = users_by_name["admin"]
@@ -111,9 +100,7 @@ class BootstrapTests(unittest.TestCase):
             database.commit()
 
         with self.SessionTesting() as database:
-            users = database.scalars(
-                select(UserAccount)
-            ).all()
+            users = database.scalars(select(UserAccount)).all()
 
         self.assertEqual(users, [])
 

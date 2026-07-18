@@ -1,22 +1,20 @@
 from sqlalchemy.orm import Session
 
 from app.core.enums import RiskLevel
-from app.models.entities import ChatMessage, PsychologicalReport, MESSAGE_ROLE_USER
+from app.models.entities import MESSAGE_ROLE_USER, ChatMessage, PsychologicalReport
 from app.services.risk_service import PsychologicalAssessment
 
 
 def create_psychological_report(
-        database: Session,
-        *,
-        message: ChatMessage,
-        assessment: PsychologicalAssessment,
+    database: Session,
+    *,
+    message: ChatMessage,
+    assessment: PsychologicalAssessment,
 ) -> PsychologicalReport | None:
     """只为中、高风险用户消息创建后台消息"""
 
     if message.role != MESSAGE_ROLE_USER:
-        raise ValueError(
-            "Psychological reports require a user message."
-        )
+        raise ValueError("Psychological reports require a user message.")
 
     if assessment.risk_level is RiskLevel.LOW:
         return None
@@ -33,9 +31,7 @@ def create_psychological_report(
         summary=assessment.summary,
     )
 
-    report.matched_signals = (
-        assessment.matched_signals
-    )
+    report.matched_signals = list(assessment.matched_signals)
 
     database.add(report)
     database.flush()

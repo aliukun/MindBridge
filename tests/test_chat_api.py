@@ -4,7 +4,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.bootstrap import create_schema
@@ -14,7 +14,12 @@ from app.core.database import (
     get_db,
 )
 from app.main import create_app
-from app.models.entities import ROLE_USER, PsychologicalReport, MESSAGE_ROLE_USER, ChatMessage
+from app.models.entities import (
+    MESSAGE_ROLE_USER,
+    ROLE_USER,
+    ChatMessage,
+    PsychologicalReport,
+)
 from app.services.chat_service import create_chat_message
 from app.services.user_service import create_user
 
@@ -54,8 +59,7 @@ class ChatApiTests(unittest.TestCase):
 
         self.application = create_app()
 
-        def override_get_db(
-        ) -> Generator[Session, None, None]:
+        def override_get_db() -> Generator[Session, None, None]:
             database = self.SessionTesting()
 
             try:
@@ -63,13 +67,9 @@ class ChatApiTests(unittest.TestCase):
             finally:
                 database.close()
 
-        self.application.dependency_overrides[
-            get_db
-        ] = override_get_db
+        self.application.dependency_overrides[get_db] = override_get_db
 
-        self.client = TestClient(
-            self.application
-        )
+        self.client = TestClient(self.application)
 
         self.student_auth = (
             "student",
@@ -86,9 +86,7 @@ class ChatApiTests(unittest.TestCase):
 
         self.application.dependency_overrides.clear()
 
-        Base.metadata.drop_all(
-            bind=self.engine
-        )
+        Base.metadata.drop_all(bind=self.engine)
 
         self.engine.dispose()
 
@@ -168,10 +166,7 @@ class ChatApiTests(unittest.TestCase):
         public_id = self.create_session()
 
         response = self.client.post(
-            (
-                f"/api/chat/sessions/"
-                f"{public_id}/messages"
-            ),
+            (f"/api/chat/sessions/{public_id}/messages"),
             json={
                 "content": "  Hello  ",
             },
@@ -199,10 +194,7 @@ class ChatApiTests(unittest.TestCase):
         )
 
         history = self.client.get(
-            (
-                f"/api/chat/sessions/"
-                f"{public_id}/messages"
-            ),
+            (f"/api/chat/sessions/{public_id}/messages"),
             auth=self.student_auth,
         )
 
@@ -220,10 +212,7 @@ class ChatApiTests(unittest.TestCase):
         public_id = self.create_session()
 
         response = self.client.post(
-            (
-                f"/api/chat/sessions/"
-                f"{public_id}/messages"
-            ),
+            (f"/api/chat/sessions/{public_id}/messages"),
             json={
                 "content": "Forged",
                 "role": "assistant",
@@ -241,15 +230,10 @@ class ChatApiTests(unittest.TestCase):
     def test_owner_cannot_post_to_another_users_session(
         self,
     ):
-        public_id = self.create_session(
-            auth=self.other_auth
-        )
+        public_id = self.create_session(auth=self.other_auth)
 
         response = self.client.post(
-            (
-                f"/api/chat/sessions/"
-                f"{public_id}/messages"
-            ),
+            (f"/api/chat/sessions/{public_id}/messages"),
             json={
                 "content": "Intrusion",
             },
@@ -264,15 +248,10 @@ class ChatApiTests(unittest.TestCase):
     def test_owner_cannot_read_another_users_session(
         self,
     ):
-        public_id = self.create_session(
-            auth=self.other_auth
-        )
+        public_id = self.create_session(auth=self.other_auth)
 
         response = self.client.get(
-            (
-                f"/api/chat/sessions/"
-                f"{public_id}/messages"
-            ),
+            (f"/api/chat/sessions/{public_id}/messages"),
             auth=self.student_auth,
         )
 
@@ -283,18 +262,12 @@ class ChatApiTests(unittest.TestCase):
 
     def test_invalid_and_unknown_public_ids_are_safe(self):
         malformed = self.client.get(
-            (
-                "/api/chat/sessions/"
-                "not-a-uuid/messages"
-            ),
+            ("/api/chat/sessions/not-a-uuid/messages"),
             auth=self.student_auth,
         )
 
         unknown = self.client.get(
-            (
-                f"/api/chat/sessions/"
-                f"{uuid4()}/messages"
-            ),
+            (f"/api/chat/sessions/{uuid4()}/messages"),
             auth=self.student_auth,
         )
 
@@ -312,14 +285,9 @@ class ChatApiTests(unittest.TestCase):
         public_id = self.create_session()
 
         response = self.client.post(
-            (
-                f"/api/chat/sessions/"
-                f"{public_id}/messages"
-            ),
+            (f"/api/chat/sessions/{public_id}/messages"),
             json={
-                "content": (
-                    "我连续失眠，已经无法正常生活。"
-                ),
+                "content": ("我连续失眠，已经无法正常生活。"),
             },
             auth=self.student_auth,
         )
@@ -335,11 +303,7 @@ class ChatApiTests(unittest.TestCase):
         )
 
         with self.SessionTesting() as database:
-            reports = list(
-                database.scalars(
-                    select(PsychologicalReport)
-                ).all()
-            )
+            reports = list(database.scalars(select(PsychologicalReport)).all())
 
         self.assertEqual(
             len(reports),
@@ -352,15 +316,12 @@ class ChatApiTests(unittest.TestCase):
         )
 
     def test_high_message_creates_hidden_report_only(
-            self,
+        self,
     ):
         public_id = self.create_session()
 
         response = self.client.post(
-            (
-                f"/api/chat/sessions/"
-                f"{public_id}/messages"
-            ),
+            (f"/api/chat/sessions/{public_id}/messages"),
             json={
                 "content": "我不想活了。",
             },
@@ -390,10 +351,7 @@ class ChatApiTests(unittest.TestCase):
         )
 
         history = self.client.get(
-            (
-                f"/api/chat/sessions/"
-                f"{public_id}/messages"
-            ),
+            (f"/api/chat/sessions/{public_id}/messages"),
             auth=self.student_auth,
         )
 
@@ -405,17 +363,12 @@ class ChatApiTests(unittest.TestCase):
         messages = history.json()["messages"]
 
         self.assertEqual(
-            [
-                message["role"]
-                for message in messages
-            ],
+            [message["role"] for message in messages],
             ["user"],
         )
 
         with self.SessionTesting() as database:
-            report = database.scalars(
-                select(PsychologicalReport)
-            ).one()
+            report = database.scalars(select(PsychologicalReport)).one()
 
         self.assertEqual(
             report.risk_level,
@@ -423,16 +376,16 @@ class ChatApiTests(unittest.TestCase):
         )
 
     def test_route_rolls_back_all_rows_when_processing_fails(
-            self,
+        self,
     ):
         public_id = self.create_session()
 
         def fail_after_message(
-                database,
-                *,
-                owner,
-                session_public_id,
-                content,
+            database,
+            *,
+            owner,
+            session_public_id,
+            content,
         ):
             create_chat_message(
                 database,
@@ -442,20 +395,20 @@ class ChatApiTests(unittest.TestCase):
                 content=content,
             )
 
-            raise RuntimeError(
-                "simulated failure"
-            )
+            raise RuntimeError("simulated failure")
 
-        with patch(
+        with (
+            patch(
                 "app.api.routes.process_user_message",
                 side_effect=fail_after_message,
+            ),
+            patch(
+                "app.core.errors.logger.error",
+            ),
         ):
             with self.assertRaises(RuntimeError):
                 self.client.post(
-                    (
-                        f"/api/chat/sessions/"
-                        f"{public_id}/messages"
-                    ),
+                    (f"/api/chat/sessions/{public_id}/messages"),
                     json={
                         "content": "我不想活了。",
                     },
@@ -464,19 +417,16 @@ class ChatApiTests(unittest.TestCase):
 
         with self.SessionTesting() as database:
             message_count = database.scalar(
-                select(func.count()).select_from(
-                    ChatMessage
-                )
+                select(func.count()).select_from(ChatMessage)
             )
 
             report_count = database.scalar(
-                select(func.count()).select_from(
-                    PsychologicalReport
-                )
+                select(func.count()).select_from(PsychologicalReport)
             )
 
         self.assertEqual(message_count, 0)
         self.assertEqual(report_count, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,22 +1,17 @@
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
-
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import hash_password, verify_password
-
 from app.models.entities import ROLE_ADMIN, UserAccount
 from app.services.user_service import get_user_by_username
 
-
 basic_auth = HTTPBasic(realm="MindBridge")
 
-_dummy_password_hash = hash_password(
-    "dummy-password-never-used-for-login"
-)
+_dummy_password_hash = hash_password("dummy-password-never-used-for-login")
 
 
 def _incorrect_credentials_exception() -> HTTPException:
@@ -26,9 +21,7 @@ def _incorrect_credentials_exception() -> HTTPException:
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Incorrect username or password",
         headers={
-            "WWW-Authenticate": (
-                'Basic realm="MindBridge"'
-            ),
+            "WWW-Authenticate": ('Basic realm="MindBridge"'),
         },
     )
 
@@ -51,9 +44,7 @@ def get_current_user(
     )
 
     password_hash_to_check = (
-        user.password_hash
-        if user is not None
-        else _dummy_password_hash
+        user.password_hash if user is not None else _dummy_password_hash
     )
 
     password_is_valid = verify_password(

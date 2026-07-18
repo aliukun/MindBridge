@@ -9,14 +9,14 @@ from app.core.database import Base, build_engine
 from app.models.entities import (
     MESSAGE_ROLE_ASSISTANT,
     MESSAGE_ROLE_USER,
+    ROLE_USER,
     ChatMessage,
     ChatSession,
-    ROLE_USER,
 )
 from app.services.chat_service import (
-    ChatSessionNotFoundError,
     MAX_MESSAGE_LENGTH,
     MAX_TITLE_LENGTH,
+    ChatSessionNotFoundError,
     create_chat_message,
     create_chat_session,
     get_chat_history,
@@ -58,9 +58,7 @@ class ChatServiceTests(unittest.TestCase):
             database.commit()
 
     def tearDown(self):
-        Base.metadata.drop_all(
-            bind=self.engine
-        )
+        Base.metadata.drop_all(bind=self.engine)
 
         self.engine.dispose()
 
@@ -124,10 +122,7 @@ class ChatServiceTests(unittest.TestCase):
             )
 
         self.assertEqual(
-            [
-                (item.role, item.content)
-                for item in history.messages
-            ],
+            [(item.role, item.content) for item in history.messages],
             [
                 ("user", "Hello"),
                 ("assistant", "Hi there"),
@@ -161,9 +156,7 @@ class ChatServiceTests(unittest.TestCase):
 
             database.commit()
 
-            with self.assertRaises(
-                ChatSessionNotFoundError
-            ):
+            with self.assertRaises(ChatSessionNotFoundError):
                 get_chat_history(
                     database,
                     owner=self.other,
@@ -187,11 +180,7 @@ class ChatServiceTests(unittest.TestCase):
                     content="   ",
                 )
 
-            count = database.scalar(
-                select(func.count()).select_from(
-                    ChatMessage
-                )
-            )
+            count = database.scalar(select(func.count()).select_from(ChatMessage))
 
         self.assertEqual(count, 0)
 
@@ -207,11 +196,7 @@ class ChatServiceTests(unittest.TestCase):
                     title="a" * (MAX_TITLE_LENGTH + 1),
                 )
 
-            count = database.scalar(
-                select(func.count()).select_from(
-                    ChatSession
-                )
-            )
+            count = database.scalar(select(func.count()).select_from(ChatSession))
 
         self.assertEqual(count, 0)
 
@@ -225,10 +210,7 @@ class ChatServiceTests(unittest.TestCase):
 
             with self.assertRaisesRegex(
                 ValueError,
-                (
-                    "Message content must not exceed "
-                    f"{MAX_MESSAGE_LENGTH} characters."
-                ),
+                (f"Message content must not exceed {MAX_MESSAGE_LENGTH} characters."),
             ):
                 create_chat_message(
                     database,
@@ -238,11 +220,7 @@ class ChatServiceTests(unittest.TestCase):
                     content="a" * (MAX_MESSAGE_LENGTH + 1),
                 )
 
-            count = database.scalar(
-                select(func.count()).select_from(
-                    ChatMessage
-                )
-            )
+            count = database.scalar(select(func.count()).select_from(ChatMessage))
 
         self.assertEqual(count, 0)
 
