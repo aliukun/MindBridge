@@ -23,7 +23,7 @@ class SettingsTests(unittest.TestCase):
 
         self.assertEqual(
             settings.app_version,
-            "0.4.0",
+            "0.5.0",
         )
 
         self.assertEqual(

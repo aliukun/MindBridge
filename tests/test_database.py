@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.bootstrap import create_schema
 from app.core.database import build_engine, Base
-from app.models.entities import UserAccount, ChatSession, ChatMessage
+from app.models.entities import UserAccount, ChatSession, ChatMessage, PsychologicalReport
 
 
 class DatabaseTests(unittest.TestCase):
@@ -39,6 +39,7 @@ class DatabaseTests(unittest.TestCase):
                 "user_accounts",
                 "chat_sessions",
                 "chat_messages",
+                "psychological_reports",
             }.issubset(table_names)
         )
 
@@ -78,7 +79,7 @@ class DatabaseTests(unittest.TestCase):
             )
 
     def test_deleting_user_cascades_sessions_and_messages(self):
-        """删除用户时，其会话和消息也应被删除"""
+        """删除用户时，会话、消息和报告也应被删除。"""
 
         with self.SessionTesting() as database:
             user = UserAccount(
@@ -96,6 +97,19 @@ class DatabaseTests(unittest.TestCase):
                 ChatMessage(
                     role="user",
                     content="Hello",
+                )
+            )
+
+            chat_session.messages[0].assessment_report = (
+                PsychologicalReport(
+                    risk_level="HIGH",
+                    matched_signals_csv=(
+                        "SELF_HARM_OR_SUICIDE"
+                    ),
+                    assessment_method=(
+                        "keyword_rule_v1"
+                    ),
+                    summary="Test report",
                 )
             )
 
@@ -117,8 +131,15 @@ class DatabaseTests(unittest.TestCase):
                 )
             )
 
+            report_count = database.scalar(
+                select(func.count()).select_from(
+                    PsychologicalReport
+                )
+            )
+
             self.assertEqual(session_count, 0)
             self.assertEqual(message_count, 0)
+            self.assertEqual(report_count, 0)
 
 
 if __name__ == '__main__':

@@ -1,8 +1,10 @@
 import unittest
 from collections.abc import Generator
+from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.bootstrap import create_schema
@@ -12,7 +14,8 @@ from app.core.database import (
     get_db,
 )
 from app.main import create_app
-from app.models.entities import ROLE_USER
+from app.models.entities import ROLE_USER, PsychologicalReport, MESSAGE_ROLE_USER, ChatMessage
+from app.services.chat_service import create_chat_message
 from app.services.user_service import create_user
 
 
@@ -185,6 +188,16 @@ class ChatApiTests(unittest.TestCase):
             "user",
         )
 
+        self.assertNotIn(
+            "risk_level",
+            response.json(),
+        )
+
+        self.assertNotIn(
+            "matched_signals",
+            response.json(),
+        )
+
         history = self.client.get(
             (
                 f"/api/chat/sessions/"
@@ -214,6 +227,8 @@ class ChatApiTests(unittest.TestCase):
             json={
                 "content": "Forged",
                 "role": "assistant",
+                "risk_level": "LOW",
+                "matched_signals": [],
             },
             auth=self.student_auth,
         )
@@ -293,6 +308,175 @@ class ChatApiTests(unittest.TestCase):
             404,
         )
 
+    def test_medium_message_creates_hidden_report(self):
+        public_id = self.create_session()
+
+        response = self.client.post(
+            (
+                f"/api/chat/sessions/"
+                f"{public_id}/messages"
+            ),
+            json={
+                "content": (
+                    "我连续失眠，已经无法正常生活。"
+                ),
+            },
+            auth=self.student_auth,
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+        )
+
+        self.assertNotIn(
+            "risk_level",
+            response.json(),
+        )
+
+        with self.SessionTesting() as database:
+            reports = list(
+                database.scalars(
+                    select(PsychologicalReport)
+                ).all()
+            )
+
+        self.assertEqual(
+            len(reports),
+            1,
+        )
+
+        self.assertEqual(
+            reports[0].risk_level,
+            "MEDIUM",
+        )
+
+    def test_high_message_creates_hidden_report_only(
+            self,
+    ):
+        public_id = self.create_session()
+
+        response = self.client.post(
+            (
+                f"/api/chat/sessions/"
+                f"{public_id}/messages"
+            ),
+            json={
+                "content": "我不想活了。",
+            },
+            auth=self.student_auth,
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+        )
+
+        response_text = response.text
+
+        self.assertNotIn(
+            "HIGH",
+            response_text,
+        )
+
+        self.assertNotIn(
+            "risk_level",
+            response_text,
+        )
+
+        self.assertNotIn(
+            "matched_signals",
+            response_text,
+        )
+
+        history = self.client.get(
+            (
+                f"/api/chat/sessions/"
+                f"{public_id}/messages"
+            ),
+            auth=self.student_auth,
+        )
+
+        self.assertEqual(
+            history.status_code,
+            200,
+        )
+
+        messages = history.json()["messages"]
+
+        self.assertEqual(
+            [
+                message["role"]
+                for message in messages
+            ],
+            ["user"],
+        )
+
+        with self.SessionTesting() as database:
+            report = database.scalars(
+                select(PsychologicalReport)
+            ).one()
+
+        self.assertEqual(
+            report.risk_level,
+            "HIGH",
+        )
+
+    def test_route_rolls_back_all_rows_when_processing_fails(
+            self,
+    ):
+        public_id = self.create_session()
+
+        def fail_after_message(
+                database,
+                *,
+                owner,
+                session_public_id,
+                content,
+        ):
+            create_chat_message(
+                database,
+                owner=owner,
+                session_public_id=session_public_id,
+                role=MESSAGE_ROLE_USER,
+                content=content,
+            )
+
+            raise RuntimeError(
+                "simulated failure"
+            )
+
+        with patch(
+                "app.api.routes.process_user_message",
+                side_effect=fail_after_message,
+        ):
+            with self.assertRaises(RuntimeError):
+                self.client.post(
+                    (
+                        f"/api/chat/sessions/"
+                        f"{public_id}/messages"
+                    ),
+                    json={
+                        "content": "我不想活了。",
+                    },
+                    auth=self.student_auth,
+                )
+
+        with self.SessionTesting() as database:
+            message_count = database.scalar(
+                select(func.count()).select_from(
+                    ChatMessage
+                )
+            )
+
+            report_count = database.scalar(
+                select(func.count()).select_from(
+                    PsychologicalReport
+                )
+            )
+
+        self.assertEqual(message_count, 0)
+        self.assertEqual(report_count, 0)
 
 if __name__ == "__main__":
     unittest.main()

@@ -176,3 +176,87 @@ class ChatMessage(Base):
     session: Mapped[ChatSession] = relationship(
         back_populates="messages",
     )
+
+    assessment_report: Mapped[
+        PsychologicalReport | None
+    ] = relationship(
+        back_populates="message",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+class PsychologicalReport(Base):
+    """中、高风险消息对应的后台心理安全报告。"""
+
+    __tablename__ = "psychological_reports"
+
+    __table_args__ = (
+        CheckConstraint(
+            "risk_level IN ('MEDIUM', 'HIGH')",
+            name="ck_psychological_reports_risk_level",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+    )
+
+    message_id: Mapped[int] = mapped_column(
+        ForeignKey("chat_messages.id"),
+        unique=True,
+        index=True,
+    )
+
+    risk_level: Mapped[str] = mapped_column(
+        String(16),
+        index=True,
+    )
+
+    matched_signals_csv: Mapped[str] = mapped_column(
+        String(512),
+        default="",
+    )
+
+    assessment_method: Mapped[str] = mapped_column(
+        String(64),
+    )
+
+    summary: Mapped[str] = mapped_column(
+        Text,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+    )
+
+    message: Mapped[ChatMessage] = relationship(
+        back_populates="assessment_report",
+    )
+
+    @property
+    def matched_signals(self) -> list[str]:
+        """把逗号分隔的信号类别转换成列表。"""
+
+        return [
+            signal
+            for signal in self.matched_signals_csv.split(",")
+            if signal
+        ]
+
+    @matched_signals.setter
+    def matched_signals(
+        self,
+        value: tuple[str, ...] | list[str],
+    ) -> None:
+        """清理、去重并持久化信号类别。"""
+
+        cleaned_signals = {
+            signal.strip()
+            for signal in value
+            if signal.strip()
+        }
+
+        self.matched_signals_csv = ",".join(
+            sorted(cleaned_signals)
+        )

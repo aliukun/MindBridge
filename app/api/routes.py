@@ -8,10 +8,11 @@ from app.api.dependencies import get_current_user, require_admin
 
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.models.entities import MESSAGE_ROLE_USER, UserAccount
+from app.models.entities import UserAccount
 from app.schemas.chat import ChatHistoryPublic, ChatMessageCreate, ChatMessagePublic, ChatSessionCreate, ChatSessionPublic
 from app.schemas.users import UserPublic
 from app.services.chat_service import ChatSessionNotFoundError, create_chat_message, create_chat_session, get_chat_history
+from app.services.message_service import process_user_message
 
 router = APIRouter()
 
@@ -108,14 +109,13 @@ def save_user_message(
         Depends(get_db),
     ],
 ):
-    """在当前用户自己的会话中保存用户消息。"""
+    """保存用户消息并执行后台风险硬规则。"""
 
     try:
-        message = create_chat_message(
+        result = process_user_message(
             database,
             owner=current_user,
             session_public_id=session_public_id,
-            role=MESSAGE_ROLE_USER,
             content=request.content,
         )
 
@@ -131,9 +131,11 @@ def save_user_message(
         database.rollback()
         raise
 
-    database.refresh(message)
+    database.refresh(
+        result.user_message
+    )
 
-    return message
+    return result.user_message
 
 
 @router.get(
