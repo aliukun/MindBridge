@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-v0.6.0
+v0.7.0
 
 ## 当前已完成
 
@@ -47,10 +47,18 @@ v0.6.0
 - pip 依赖一致性检查
 - 本地与 GitHub Actions 共用同一套质量检查
 - GitHub Actions
+- 内部 AI 消息、请求、完成结果和流式块契约
+- system、user、assistant AI 角色边界
+- AI 请求参数范围校验
+- 稳定的 AI 异常层级
+- 异步 AiProvider Protocol
+- 离线确定性 Mock Provider
+- 严格 Provider Factory
+- 应用组装层中的 Provider 与默认请求选项
 
 ## 尚未实现
 
-- AI 模型调用
+- 真实 Ollama 和 OpenAI-compatible 模型调用
 - AI 与硬规则风险结果合并
 - 高风险安全回复
 - SSE 流式聊天
@@ -156,6 +164,38 @@ powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1
 
 任意一步失败，脚本都会立即停止并返回非零退出码。GitHub Actions 在
 Python 3.12 环境中调用同一个脚本，避免本地检查与 CI 使用不同标准。
+
+当前 v0.7.0 质量基线：
+
+- 96 个自动化测试全部通过
+- 综合分支覆盖率为 93%，高于 90% 门槛
+- 50 个 Python 文件通过 Ruff 格式检查
+- 32 个应用源文件通过 mypy
+
+## 当前 AI Provider 边界
+
+v0.7.0 只实现离线确定性 Mock Provider。
+
+它不会访问 Ollama、OpenAI API、网络、模型文件或数据库。相同的规范化请求会
+经过稳定 JSON 序列化和 SHA-256 摘要生成相同结果；流式输出按固定大小切分，
+全部增量可以重新拼成非流式结果，并且只产生一个明确的终止块。
+
+当前 AI 层已经定义：
+
+- AiMessage、AiRequestOptions 和 AiRequest 请求契约
+- AiCompletion、AiStreamChunk 和 ProviderStatus 响应契约
+- system、user、assistant 内部角色边界
+- AiError、AiConfigurationError 和 AiProviderError 异常层级
+- complete、stream 和 status Provider Protocol
+- 未知 Provider 拒绝启动且不静默回退 Mock 的严格工厂
+- 应用组装层中的 Provider 和不可变默认请求选项
+
+Mock 的作用是验证请求、响应、流式块、异常、工厂和依赖注入边界，不代表真实
+心理支持回复质量。当前聊天 API 尚未调用 Provider；真实 Ollama 和
+OpenAI-compatible Provider 将在 v0.8.0 实现，安全聊天闭环将在 v0.9.0 实现。
+
+AI 的 system 消息只属于模型上下文，不会写入当前只允许 user 和 assistant 的
+聊天消息表。Provider 状态、内部 prompt 和模型错误也不会通过学生接口外显。
 
 ## 当前数据库
 

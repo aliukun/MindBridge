@@ -3,6 +3,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.ai.factory import (
+    build_ai_provider,
+    build_ai_request_options,
+)
 from app.api.routes import router
 from app.core.bootstrap import bootstrap_database
 from app.core.config import get_settings
@@ -27,6 +31,13 @@ def create_app() -> FastAPI:
 
     settings = get_settings()
 
+    ai_provider = build_ai_provider(
+        settings.ai_provider,
+    )
+    ai_request_options = build_ai_request_options(
+        settings,
+    )
+
     configure_logging(settings)
 
     application = FastAPI(
@@ -34,6 +45,9 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         lifespan=lifespan,
     )
+
+    application.state.ai_provider = ai_provider
+    application.state.ai_request_options = ai_request_options
 
     application.add_middleware(RequestIdMiddleware)
 

@@ -4,7 +4,7 @@
 >
 > 目标不是逐文件照抄最终版，而是保留学习版已有的更好设计，吸收最终版中真正重要的技术链路，并把每个大问题拆成适合初学者编码、测试和提交 GitHub 的小阶段。
 >
-> v0.6.0 的代码、测试、开发数据库重建和文档验收已于 2026-07-18 完成。本阶段没有复制模型、安装 Ollama，也没有执行任何 Git 操作。
+> v0.7.0 的代码、测试、离线 Mock 手工验收和文档同步已于 2026-07-19 完成。当前共有 96 个测试，综合分支覆盖率为 93%；本阶段没有复制模型、安装 Ollama、接入聊天路由或改变数据库 Schema，Codex 也没有执行暂存、提交、打标签或推送。
 
 ## 一、如何使用这份计划
 
@@ -361,57 +361,45 @@ Git 里程碑：
 
 ### v0.7.0：AI 调用契约与确定性 Mock
 
-状态：待开发
+状态：已完成
 
-前置条件：
+实际完成内容：
 
-- v0.6.0 已通过。
+- 通用 AI 配置、请求参数边界和应用版本已更新到 v0.7.0。
+- AI 内部契约固定放在 app/ai/contracts.py，不复用 HTTP DTO 或 ORM 实体。
+- 在原规划基础上补充 AiRequest，集中校验 1 至 64 条消息和不可变请求选项。
+- 已定义 AiRole、AiFinishReason、ProviderState、AiMessage、AiRequestOptions、AiRequest、AiCompletion、AiStreamChunk 和 ProviderStatus。
+- 契约模型统一禁止额外字段并设为不可变；消息保留有意义的原始排版，但拒绝纯空白内容。
+- 已建立 AiError、AiConfigurationError、AiProviderError 及超时、认证、模型不存在、限流、不可用和协议错误层级。
+- 已建立结构化 AiProvider Protocol；complete 和 status 为异步调用，stream 返回可直接 async for 的 AsyncIterator。
+- 已实现 DeterministicMockProvider，不读取网络、时间、随机数、UUID、数据库或全局配置。
+- Mock 使用稳定 JSON 和 SHA-256 生成跨实例确定结果，不回显完整用户输入。
+- Mock 流式输出使用固定切片，所有 delta 可完整重组 completion，最后只产生一个带 finish reason 的终止块。
+- Provider Factory 对名称执行 strip 和 casefold；未知或空名称抛 AiConfigurationError，不静默回退 Mock。
+- create_app 作为 composition root 构造 Provider 和不可变默认请求选项，并保存到 application.state。
+- 当前聊天 API 未读取或调用 Provider；以后由 FastAPI dependency 取出，再通过构造参数注入业务服务，避免 Service Locator。
+- AI_PROVIDER、AI_TEMPERATURE 和 AI_MAX_TOKENS 已提前到本阶段；非法数值在 Settings 创建时失败，未知 Provider 在应用组装时失败。
+- 没有新增运行时依赖，也没有引入 Ollama、模型文件、API key 或真实网络客户端。
 
-阶段目标：
+自动化验收：
 
-- 先建立业务代码与模型供应商之间的稳定边界。
-- 在没有 Ollama、没有 GGUF、没有 API key 的情况下完成全部自动测试。
-
-编码顺序：
-
-1. 在 app/schemas/ai.py 或 app/ai/contracts.py 定义：
-   - AiMessage
-   - AiRequestOptions
-   - AiCompletion
-   - AiStreamChunk
-   - ProviderStatus
-2. 使用 Literal 或 Enum 限定 system、user、assistant 角色。
-3. 在 app/ai/errors.py 定义：
-   - AiConfigurationError
-   - AiUnavailableError
-   - AiTimeoutError
-   - AiAuthenticationError
-   - AiModelNotFoundError
-   - AiRateLimitError
-   - AiProtocolError
-4. 在 app/ai/providers/base.py 定义异步 Provider Protocol：
-   - complete
-   - stream
-   - status
-5. 实现确定性 Mock Provider。相同输入必须返回相同结果，不能依赖随机数和网络。
-6. 实现 Provider Factory。默认配置为 mock；未知 Provider 立即抛出 AiConfigurationError。
-7. Provider 通过构造参数注入服务，业务服务不能在方法内部偷偷创建全局客户端。
-8. 为请求选项设置明确上限，例如 temperature 和 max_tokens；配置非法时启动即失败。
-9. 当前聊天 API 暂时不调用 Provider，只单独测试契约和工厂。
-
-重点测试：
-
-- AI_PROVIDER=mock 不产生任何网络访问。
-- 相同输入获得确定性输出。
-- 未知 Provider 不会静默回退 Mock。
-- 非法角色、空消息、超大 max_tokens 被拒绝。
-- Provider 异常类型可被上层稳定捕获。
-- stream 输出可被完整拼回 complete 的文本。
+- 原有 71 个测试与新增测试合计 96 个，全部通过。
+- contracts.py、errors.py、factory.py 和 Provider Protocol 达到 100% 覆盖率，Mock Provider 达到 98%。
+- 项目综合分支覆盖率为 93%，高于 90% 门槛。
+- pip check、Ruff lint、Ruff format check、mypy 和 compileall 全部通过。
+- Ruff 确认 50 个文件格式正确，mypy 确认 32 个应用源文件无问题。
+- 自动测试证明 Mock complete、stream 和 status 不调用 socket.create_connection。
+- 相同请求跨实例结果一致，不同请求产生不同指纹。
+- 非法角色、空白消息、额外字段、空消息集合、超过 64 条消息、非法 temperature、NaN 和超大 max_tokens 均被拒绝。
+- 未知 Provider 在工厂和 create_app 组装路径中均被拒绝。
+- 原有健康检查、认证、聊天、事务、风险规则、报告和 Schema 防护测试全部无回归。
 
 手工验收：
 
-- 在 Python 控制台创建 Mock Provider 并完成一次调用。
-- 关闭网络后全部测试仍通过。
+- 在独立 Python 进程中通过工厂创建 Mock Provider，status 返回 READY。
+- 对同一请求执行两次 complete，结果相等。
+- stream 的全部 delta 可重新拼成 complete 文本，并且终止块数量为 1。
+- 本阶段没有改变 ORM 或数据库 Schema，因此没有删除或重建开发 SQLite。
 
 本阶段不做：
 
@@ -425,6 +413,7 @@ Git 里程碑：
 
 - 建议 commit：feat(ai): add provider contracts and deterministic mock
 - 建议 tag：v0.7.0
+- Codex 未执行暂存、提交、打标签或推送；由开发者在本地完成最终 Git 操作。
 
 ### v0.8.0：真实 Provider 与本地微调模型资产
 
@@ -453,40 +442,42 @@ Python 不直接 import 或加载 4.68 GB GGUF。
 编码顺序：
 
 1. 将 httpx 加入运行时 requirements.txt。
-2. 在 Settings 中加入严格类型化配置：
+2. 复用 v0.7.0 已完成的通用配置和契约：
    - ai_provider
-   - ai_timeout_seconds
    - ai_temperature
    - ai_max_tokens
+   - AiRequest、AiCompletion、AiStreamChunk 和 ProviderStatus
+3. 新增真实网络 Provider 专属配置：
+   - ai_timeout_seconds
    - ollama_base_url
    - ollama_model
    - openai_compatible_base_url
    - openai_compatible_api_key，使用 SecretStr
    - openai_compatible_model
-3. 创建根目录 models/mindbridge-qwen2.5-7b-ft/README.md。
-4. 创建或迁移与模型匹配的 Modelfile；提交 Modelfile，不提交 GGUF。
-5. 确认 .gitignore 继续忽略 gguf、safetensors、bin 和模型压缩包。
-6. 实现 app/services/model_assets.py，但把状态拆成四层：
+4. 创建根目录 models/mindbridge-qwen2.5-7b-ft/README.md。
+5. 创建或迁移与模型匹配的 Modelfile；提交 Modelfile，不提交 GGUF。
+6. 确认 .gitignore 继续忽略 gguf、safetensors、bin 和模型压缩包。
+7. 实现 app/services/model_assets.py，但把状态拆成四层：
    - assetStatus：权重和 Modelfile 是否存在
    - serverStatus：Ollama /api/tags 是否可达
    - registrationStatus：指定模型名是否已注册
    - inferenceStatus：可选的最小推理是否成功
-7. 检查 Modelfile 的 FROM 文件名是否与配置一致。
-8. 实现 Ollama Provider：
+8. 检查 Modelfile 的 FROM 文件名是否与配置一致。
+9. 实现 Ollama Provider：
    - 非流式 /api/chat
    - 流式 NDJSON 解析
    - 连接、读取和总超时
    - 404 模型不存在、非 2xx、坏 JSON 的异常映射
-9. 实现 OpenAI-compatible Provider：
+10. 实现 OpenAI-compatible Provider：
    - /chat/completions
    - 非流式响应
    - data: 流式事件解析
    - 401、404、429、超时和错误 JSON 映射
-10. 将 AsyncClient 作为可注入依赖，测试时使用 httpx.MockTransport。
-11. 新增管理员模型状态接口；不向学生暴露绝对磁盘路径和密钥。
-12. 新增 scripts/check_local_model.ps1，只做检查。
-13. 新增 scripts/register_local_model.ps1，显式调用 ollama create。
-14. 脚本不得自动安装 Ollama、自动下载模型或在应用启动时自动注册模型。
+11. 将 AsyncClient 作为可注入依赖，测试时使用 httpx.MockTransport；真实客户端的创建和关闭进入 lifespan，不在 Provider 方法中反复创建。
+12. 新增管理员模型状态接口；不向学生暴露绝对磁盘路径和密钥。
+13. 新增 scripts/check_local_model.ps1，只做检查。
+14. 新增 scripts/register_local_model.ps1，显式调用 ollama create。
+15. 脚本不得自动安装 Ollama、自动下载模型或在应用启动时自动注册模型。
 
 用户以后迁移模型时的边界：
 
@@ -1872,9 +1863,11 @@ tag 只在完整验收通过后创建。
 
 ## 十一、当前下一步
 
-v0.6.0 已完成代码实现、真实开发数据库重建和完整质量验收，本轮没有执行任何 Git 操作。
+v0.7.0 已完成 AI 内部契约、异常层级、Provider Protocol、确定性 Mock、严格工厂、应用组装和完整质量验收。
 
-下一阶段是 v0.7.0，但本次任务到 v0.6.0 为止，不提前加入 AI 依赖或业务代码。开始 v0.7.0 时应严格按该阶段顺序先实现 AiMessage、Provider Protocol、稳定异常和确定性 Mock Provider，再接入服务层与测试。
+当前质量基线为 96 个测试全部通过、综合分支覆盖率 93%；聊天 API 仍未调用 Provider，数据库 Schema 没有变化。
+
+下一阶段是 v0.8.0：真实 Provider 与本地微调模型资产。v0.8.0 将复用 v0.7.0 的通用契约和 AI_PROVIDER、AI_TEMPERATURE、AI_MAX_TOKENS，只新增 httpx 运行时依赖、网络超时、Ollama/OpenAI-compatible 配置、真实适配器和模型 readiness。
 
 本地微调模型迁移安排在 v0.8.0：
 
