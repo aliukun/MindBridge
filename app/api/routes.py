@@ -5,9 +5,11 @@ import httpx
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
+from app.ai.contracts import AiRequestOptions
 from app.ai.providers.base import AiProvider
 from app.api.dependencies import (
     get_ai_provider,
+    get_ai_request_options,
     get_application_settings,
     get_current_user,
     get_http_client,
@@ -24,6 +26,7 @@ from app.schemas.chat import (
     ChatMessagePublic,
     ChatSessionCreate,
     ChatSessionPublic,
+    ChatTurnPublic,
 )
 from app.schemas.users import UserPublic
 from app.services.chat_service import (
@@ -33,6 +36,7 @@ from app.services.chat_service import (
 )
 from app.services.message_service import process_user_message
 from app.services.model_assets import inspect_local_model_readiness
+from app.services.turn_service import TurnAiUnavailableError, TurnService
 
 router = APIRouter()
 
@@ -199,6 +203,64 @@ def save_user_message(
     database.refresh(result.user_message)
 
     return result.user_message
+
+
+@router.post(
+    "/api/chat/sessions/{session_public_id}/turns",
+    response_model=ChatTurnPublic,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_chat_turn(
+    session_public_id: UUID,
+    request: ChatMessageCreate,
+    current_user: Annotated[
+        UserAccount,
+        Depends(get_current_user),
+    ],
+    database: Annotated[
+        Session,
+        Depends(get_db),
+    ],
+    provider: Annotated[
+        AiProvider,
+        Depends(get_ai_provider),
+    ],
+    request_options: Annotated[
+        AiRequestOptions,
+        Depends(get_ai_request_options),
+    ],
+) -> ChatTurnPublic:
+    """保存用户输入并完成一次安全、非流式 AI 轮次。"""
+
+    turn_service = TurnService(
+        provider=provider,
+        request_options=request_options,
+    )
+
+    try:
+        result = await turn_service.process_turn(
+            database,
+            owner=current_user,
+            session_public_id=session_public_id,
+            content=request.content,
+        )
+    except ChatSessionNotFoundError as error:
+        raise AppError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code=ErrorCode.CHAT_SESSION_NOT_FOUND,
+            detail="Chat session not found.",
+        ) from error
+    except TurnAiUnavailableError as error:
+        raise AppError(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            code=ErrorCode.AI_SERVICE_UNAVAILABLE,
+            detail=("AI service is temporarily unavailable. Please try again later."),
+        ) from error
+
+    return ChatTurnPublic(
+        session=ChatSessionPublic.model_validate(result.session),
+        assistant_message=ChatMessagePublic.model_validate(result.assistant_message),
+    )
 
 
 @router.get(

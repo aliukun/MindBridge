@@ -44,6 +44,7 @@ class ErrorCode(StrEnum):
     VALIDATION_ERROR = "validation_error"
     INTERNAL_ERROR = "internal_error"
     CHAT_SESSION_NOT_FOUND = "chat_session_not_found"
+    AI_SERVICE_UNAVAILABLE = "ai_service_unavailable"
 
 
 class AppError(Exception):

@@ -92,3 +92,15 @@ class ChatHistoryPublic(BaseModel):
 
     session: ChatSessionPublic
     messages: list[ChatMessagePublic]
+
+
+class ChatTurnPublic(BaseModel):
+    """一次完整非流式聊天轮次的学生可见结果。"""
+
+    session: ChatSessionPublic
+    assistant_message: ChatMessagePublic
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+    )

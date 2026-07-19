@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     """MindBridge 集中配置。"""
 
     app_name: str = "MindBridge Learn"
-    app_version: str = "0.8.0"
+    app_version: str = "0.9.0"
     environment: str = "development"
     log_level: Literal[
         "DEBUG",

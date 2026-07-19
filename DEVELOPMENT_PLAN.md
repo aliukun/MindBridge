@@ -1,10 +1,10 @@
 # MindBridge Learn 开发计划
 
-> 本文档于 2026-07-18 基于 MindBridge Learn v0.5.0 的真实代码、测试结果和最终版 MindBridge 的实现重新审阅后制定，并根据开发者对开发期数据库数据可丢弃的决定再次调整。
+> 本文档于 2026-07-18 基于 MindBridge Learn v0.5.0 的真实代码、测试结果和最终版 MindBridge 的实现重新审阅后制定，并根据开发者对开发期数据库数据可丢弃的决定再次调整；2026-07-20 又根据 v0.9.0 的实际实现同步更新。
 >
 > 目标不是逐文件照抄最终版，而是保留学习版已有的更好设计，吸收最终版中真正重要的技术链路，并把每个大问题拆成适合初学者编码、测试和提交 GitHub 的小阶段。
 >
-> v0.8.0 的真实 Provider、模型资产 readiness、管理员状态接口、Windows 脚本、测试和文档同步已完成。当前共有 132 个测试，综合分支覆盖率为 92%；真实聊天业务仍未调用 Provider，本阶段没有复制 GGUF、安装或启动 Ollama，也没有改变数据库 Schema。
+> v0.9.0 已完成：隐私脱敏、一次结构化 analysis、严格结果解析、单调风险合并、确定性 HIGH/MEDIUM 安全降级、报告幂等升级、A/B/C 短事务编排和非流式 turns API 已接入。179 个自动化测试全部通过，综合分支覆盖率为 93%；本机 GGUF 的 SHA-256、Ollama 注册、四层 readiness、严格 analysis 解析和真实 turns API 均已实际验收。模型权重继续由 Git 忽略，应用和自动化测试不会复制或直接加载 GGUF。
 
 ## 一、如何使用这份计划
 
@@ -430,7 +430,7 @@ Git 里程碑：
 - 所有真实 Provider 复用 lifespan 中的一个 AsyncClient；应用启动不探测外部服务，关闭时统一释放连接池。
 - 本地模型状态明确拆分为 asset、server、registration 和 inference 四层；默认不执行推理。
 - 新增管理员专用 `GET /api/admin/ai/status`，学生无法访问，响应不包含 API key、绝对路径和第三方正文。
-- 新增模型 README、Modelfile、检查脚本与支持 `-WhatIf`/`-Confirm` 的显式注册脚本；脚本不安装、不启动、不下载、不复制模型。
+- 新增模型 README、Modelfile、检查脚本与支持 `-WhatIf`/`-Confirm` 的显式注册脚本；脚本不安装、不启动或下载 Ollama/模型，检查脚本不复制模型，注册脚本显式调用 `ollama create`，由 Ollama 将 GGUF 内容摄取到自己的模型仓库。
 - 自动测试全部使用 MockTransport，不依赖 Ollama、GGUF、远程 API 或公网。
 - 完整质量链通过：132 个测试全部通过，综合分支覆盖率 92%，61 个 Python 文件格式正确，38 个应用源文件通过 mypy。
 - 本阶段没有改变 ORM 或数据库 Schema，不需要重建 SQLite。
@@ -535,92 +535,101 @@ Git 里程碑：
 
 ### v0.9.0：隐私边界、AI 风险合并与非流式单轮闭环
 
-状态：待开发
+状态：已完成
 
 前置条件：
 
 - v0.8.0 的 Mock、Ollama 和 OpenAI-compatible 契约一致。
 - v0.9.0 通过 FastAPI dependency 注入 v0.8.0 已组装的 AiProvider 与默认 AiRequestOptions；TurnService 不读取 request.app.state，不新建 AsyncClient，也不直接构造具体 Provider。
+- 微调 GGUF 已由开发者本人迁移到 `models/mindbridge-qwen2.5-7b-ft`，并继续由 `.gitignore` 排除；仓库、测试和发布物仍不包含模型权重。
+- 本地推理由独立 Ollama 进程托管。Python 代码不引入 `llama-cpp-python`，也不在 FastAPI 启动时读取、复制、注册或预热 GGUF。
 
 阶段目标：
 
 - 先完成可调试的非流式完整聊天，再进入 SSE。
 - 保证模型不能降低硬规则风险，模型不可用也不会丢失高风险安全响应。
+- 让普通轮次至多执行一次结构化 analysis 和一次自然语言 reply；硬规则 HIGH 完全绕过模型。
 
-编码顺序：
+实际实现：
 
-1. 新建 app/services/privacy_service.py：
-   - 手机号
-   - 邮箱
-   - 身份证号
-   - 可扩展的校园学号
-   - 使用固定占位符，不在日志保留原值
-2. 明确数据边界：
-   - 原始消息只写业务数据库
-   - 风险硬规则在原始消息上执行
-   - 发送给模型、Redis、trace 的是脱敏副本
-3. 新建 app/ai/prompts.py：
-   - 意图分类 prompt
-   - 心理风险建议 prompt
-   - 普通聊天 prompt
-   - 心理支持 prompt
-   - 高风险安全 prompt
-   - 每个模板有版本号
-4. 定义 CHAT、CONSULT、RISK 意图。
-5. 定义严格的模型评估 Schema。模型输出只视为建议，不视为临床事实。
-6. 新建 app/ai/parsing.py：
-   - 提取 JSON
-   - Pydantic 校验
-   - 枚举校验
-   - 长度限制
-   - 解析失败回退
-7. 实现风险合并：
-   - final_risk = max(hard_rule_risk, model_suggested_risk)
-   - 硬规则 HIGH 不调用模型评估，或调用结果绝不能改变 HIGH
-   - 模型超时、坏 JSON 和非法枚举回退硬规则
-8. 不把模型自报的 confidence 当作真实概率；如为调试保存，字段名必须明确为 model_reported_confidence，且不对学生展示。
-9. 实现经人工审阅的确定性 HIGH 安全回复模板：
-   - 先承接情绪
-   - 关注当下安全
-   - 建议联系身边可信任的人、校心理中心、辅导员或当地紧急资源
-   - 不提供危险细节
-   - 最多问一个与当前安全直接相关的问题
-10. 新建 app/services/turn_service.py，将单轮分为短事务和外部调用：
-    - 事务 A：保存用户消息和硬规则报告，commit
-    - 事务外：脱敏、意图识别、模型评估、生成回复
-    - 事务 B：如模型提高风险，幂等地升级或创建报告
-    - 事务 C：保存完整助手消息
-11. Provider 故障时：
-    - HIGH 返回确定性安全回复
-    - 普通场景返回明确的服务暂不可用，不伪装为真实模型回复
-    - 已保存的用户消息和风险报告不能回滚
-12. 新增非流式 turns API，同时保留原来的消息保存和历史查询 API，避免一次破坏现有接口。
-13. 学生响应只包含会话和公开助手消息，不包含意图、风险、prompt、provider 错误细节和 trace。
+1. 本地模型资产与运行边界：
+   - GGUF 已迁移到配置指定目录，`Modelfile` 继续引用相对 GGUF 文件名。
+   - `.gguf` 仍由 Git 忽略；仓库只跟踪模型说明与 `Modelfile`。
+   - 通过现有 PowerShell 脚本显式检查资产、校验 SHA-256、预览并确认 `ollama create`，不会由应用自动安装或启动 Ollama。
+   - `ollama create` 负责注册，并会把 GGUF 内容摄取到 Ollama 自己的模型仓库、占用相应磁盘空间；它不会把权重复制进 Git。FastAPI 启动只组装 Provider，第一次显式推理才可能让 Ollama 把模型加载进内存。
+2. `app/services/privacy_service.py` 使用固定占位符脱敏手机号、邮箱、身份证号和带标签的校园学号，并允许注入受信任的校园编号正则。原始消息不被覆盖。
+3. 数据边界固定为：
+   - 原始消息只进入业务数据库，并由确定性硬规则在原文上评估。
+   - 发送给 Provider 的 analysis 与 reply 都只使用脱敏副本。
+   - prompt、analysis 原始 completion、Provider 私密错误和模型原始 summary 不进入学生 DTO，也不原样持久化；正常 reply completion 只作为最终助手消息保存并返回。
+4. `app/core/enums.py` 增加 CHAT、CONSULT、RISK；`app/ai/prompts.py` 为 analysis 与 reply 分别提供稳定版本号。
+5. analysis 不再拆成意图和心理风险两次模型调用，而是一次严格 JSON 请求同时返回：
+   - `intent`
+   - `suggested_risk`
+   - 有长度上限的内部 `summary`
+   结构化 analysis 强制 `temperature=0`，并限制 token 预算；普通或支持性 reply 才使用注入的默认请求选项。
+6. `app/ai/parsing.py` 只接受纯 JSON object，或完整包裹 JSON object 的单一 JSON fence；Pydantic 禁止额外字段并校验枚举、空白和长度。解析错误不回显模型原文，而是让业务层退回硬规则结果。
+7. `app/services/ai_risk_service.py` 实现单调合并：
+   - `final_risk = max(hard_rule_risk, model_suggested_risk)`
+   - 模型只能提高、不能降低硬规则风险。
+   - 模型 summary 不原样写入报告；模型确实提高风险时只使用固定、非诊断性的内部说明和版本标识。
+   - 不保存或使用模型自报 confidence，避免把模型自信程度误当作真实概率。
+8. HIGH 路径具有双重确定性保护：
+   - 硬规则 HIGH 在脱敏和 analysis 之前直接短路，因此 Provider 调用次数为零。
+   - 模型把非 HIGH 提高到 HIGH 时，先持久化升级，再使用经人工审阅的固定安全回复，跳过自然语言 reply 调用。
+9. `app/services/report_service.py` 增加幂等、单调的 upsert：同一用户消息最多一份报告，MEDIUM 可以升级到 HIGH，HIGH 不会被后续 LOW 或 MEDIUM 降级。
+10. `app/services/turn_service.py` 将一次非流式轮次拆成明确边界：
+    - 事务 A：保存原始用户消息和硬规则报告并 commit。
+    - 事务外：对副本脱敏，并执行至多一次结构化 analysis。
+    - 事务 B：只有模型提高风险时，幂等创建或升级报告并 commit。
+    - 事务外：只有最终风险不是 HIGH 时，执行至多一次自然语言 reply。
+    - 事务 C：保存最终完整助手消息并 commit。
+    每次事务失败只回滚当前事务；外部模型调用期间不持有数据库写事务。
+11. Provider 故障和协议错误按最终风险明确降级：
+    - HIGH 始终返回确定性安全回复，不依赖 Provider。
+    - MEDIUM 在 analysis 或 reply Provider 不可用时保存确定性支持性回复，明确说明 AI 服务暂不可用。
+    - LOW 在 Provider 不可用时返回稳定 `503 ai_service_unavailable`，已经由事务 A 保存的用户消息不会被回滚，也不会伪造助手回答。
+    - analysis 返回坏 JSON、非法枚举或额外字段时忽略模型建议、保留硬规则风险，再按安全 reply 路径继续。
+12. 新增 `POST /api/chat/sessions/{session_public_id}/turns`，通过 FastAPI dependency 注入 AiProvider 与 AiRequestOptions；原有消息保存和历史查询 API 保持兼容。
+13. `ChatTurnPublic` 只返回公开会话和助手消息，不包含用户数据库主键、意图、风险、命中信号、报告、prompt、Provider 错误或内部 trace。
 
-重点测试：
+已覆盖的重点测试方向：
 
-- 脱敏副本不包含手机号、邮箱和身份证号，原始数据库消息仍完整。
-- 硬规则 HIGH 时模型无法降低风险。
-- 模型把 LOW 提到 MEDIUM 时报告被幂等升级。
-- 模型坏 JSON、超时和离线时回退正确。
-- HIGH 在 Provider 完全离线时仍返回安全回复。
-- AI 调用期间没有长时间持有写事务。
-- 事务 A 失败时消息和报告全部回滚。
-- 事务 B 重试时同一消息仍只有一份报告。
-- 助手保存失败不删除已经落库的高风险用户消息和报告。
-- 学生 DTO 不外显后台字段。
+- 固定占位符、校园学号扩展、普通数字不过度脱敏以及重复脱敏幂等。
+- analysis/reply prompt 版本、结构化选项和 HIGH 禁止构造模型 reply。
+- 纯 JSON、完整 JSON fence、坏 JSON、额外字段、非法枚举、超长 summary 和安全错误信息。
+- 模型把 LOW 提到 MEDIUM、不能降低 MEDIUM/HIGH，以及固定 summary 不包含模型原文。
+- 报告重复创建、MEDIUM 到 HIGH 升级，以及跨 Session 顺序重试下的幂等与单调性；真实并发写入安全不在本阶段承诺范围内。
+- 硬规则 HIGH 零 Provider 调用，模型 HIGH 跳过 reply，MEDIUM 确定性降级，LOW 返回 503。
+- Provider 只接收脱敏副本，原始数据库消息保持完整。
+- 模型调用时数据库没有活动写事务；事务 A、B、C 的失败边界互不越界。
+- turns API 的认证、会话所有权、公开 DTO、消息顺序与错误响应。
 
-手工验收：
+最终质量基线：
 
-- 使用 Mock 分别发送普通、咨询、中风险和高风险消息。
-- 检查数据库消息顺序和报告数量。
-- 暂时配置一个不可达的 Ollama URL，验证普通错误与 HIGH 安全回复。
+- 179 个自动化测试全部通过。
+- 综合分支覆盖率为 93%，高于 90% 门槛。
+- 74 个 Python 文件通过 Ruff lint 与格式检查。
+- 43 个应用源文件通过 mypy，`compileall` 与 `pip check` 同时通过。
+- `turn_service.py` 达到 100% 覆盖率；新增 turns API 的 6 个集成测试全部通过。
+
+本机真实验收结果：
+
+1. 4,683,073,536-byte GGUF 的 SHA-256 已验证为 `D992DEE2688614EBD24200ED85EF7CA6135DA22C961F8F78C307FD576D8F2C8D`，并确认继续被 Git 忽略。
+2. Ollama 0.31.1 已在纯 ASCII 的 `C:\OllamaModels` 中识别并注册 `mindbridge-qwen2.5-7b-ft:latest`；模型被识别为 Qwen2 7.6B、Q4_K_M。
+3. asset、server、registration 和 inference 四层状态全部为 READY，固定最小推理成功。
+4. 真实 Ollama analysis 输出已通过项目的严格 JSON Schema，普通样本得到 `CHAT` 与 `LOW`。
+5. 私有 `.env` 已切换到 `AI_PROVIDER=ollama`；真实 FastAPI 健康检查、会话创建和非流式 turns API 分别返回 200、201 和 201，助手消息完整且非空。
+6. Windows 中文用户目录会触发 Ollama 0.31.1 的路径乱码问题；本机通过设置用户级 `OLLAMA_MODELS=C:\OllamaModels` 并彻底重启 Ollama 解决。该问题不是 GGUF 损坏，不需要重新量化或修改 Modelfile。
+7. LOW/MEDIUM/HIGH 离线降级、消息保留、事务边界和学生 DTO 防泄露由不依赖 Ollama 的自动化测试覆盖。
 
 本阶段不做：
 
 - 不做 SSE。
 - 不做 RAG、Redis 或 Agent。
 - 不在 prompt 中塞入全部历史。
+- 不在应用启动时自动注册、探测或预热本地模型。
+- 不引入 `llama-cpp-python` 或在 Python 进程中直接管理 GGUF 生命周期。
 
 Git 里程碑：
 
@@ -1882,17 +1891,13 @@ tag 只在完整验收通过后创建。
 
 ## 十一、当前下一步
 
-v0.8.0 已完成真实 Provider、共享 HTTP 生命周期、稳定错误映射、本地模型四层 readiness、管理员状态接口、Windows 脚本和完整质量验收。
+v0.9.0 已形成并验收非流式安全闭环：原文先持久化，Provider 只接收脱敏副本；一次 analysis 同时给出意图与风险建议，模型风险只能单调提高；HIGH 不依赖模型，MEDIUM 与 LOW 具有不同的明确降级；报告升级和助手消息分别处于短事务中；turns API 不外显后台字段。自动质量门槛、GGUF 校验、Ollama 四层 readiness、严格 analysis 解析和真实 turns API 均已通过。
 
-当前质量基线为 132 个测试全部通过、综合分支覆盖率 92%；聊天 API 仍未调用 Provider，数据库 Schema 没有变化。GGUF 可以以后由开发者本人迁移；在资产、服务、注册与最小推理全部确认前始终保持 `AI_PROVIDER=mock`。
+当前下一开发阶段是 v0.10.0：可靠的 SSE 流式协议。开发顺序为：
 
-下一阶段是 v0.9.0：隐私边界、AI 风险合并与非流式单轮闭环。开发顺序保持为：
-
-1. 先实现手机号、邮箱、身份证号和可扩展学号的确定性脱敏，并证明原始数据库消息不被改写。
-2. 再建立带版本号的意图、风险建议、普通聊天、心理支持和高风险安全 prompt。
-3. 实现严格 JSON 提取与 Pydantic 解析，所有超时、坏 JSON 和非法枚举都回退硬规则。
-4. 实现 `max(hard_rule_risk, model_suggested_risk)`，模型永远不能降低硬规则风险。
-5. 实现无需 Provider 的确定性 HIGH 安全回复。
-6. 用 TurnService 把保存用户消息、模型网络调用、报告升级和保存助手消息拆成短事务。
-7. 通过 dependency 注入 v0.8.0 的 AiProvider 和 AiRequestOptions；TurnService 不接触 FastAPI app.state，也不创建客户端。
-8. 最后增加非流式 turns API 与完整故障降级测试；SSE 继续留在 v0.10.0。
+1. 冻结 v0.9.0 的非流式事务、安全降级和公开 DTO，流式接口复用同一风险与隐私边界。
+2. 定义稳定 SSE 事件：`meta`、`token`、`done` 和 `error`，每种事件都有严格 Schema。
+3. 让 Ollama NDJSON 与 OpenAI-compatible SSE 都转换为相同内部 AiStreamChunk，再由 API 层转换为公开事件。
+4. HIGH 场景继续使用确定性安全回复流；不得因为切换到流式而绕过硬规则或报告提交。
+5. 明确首 token 前失败、输出中途失败、客户端取消、慢客户端和超时的状态机与资源释放。
+6. 完成流式集成测试后再进入 Redis 短期记忆；v0.10.0 不提前加入 RAG、Agent 或工具调用。

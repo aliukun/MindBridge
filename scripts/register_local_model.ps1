@@ -91,7 +91,12 @@ if ($PSCmdlet.ShouldProcess(
     & $ollamaExecutable create $ModelName -f $modelfilePath
 
     if ($LASTEXITCODE -ne 0) {
-        throw "ollama create failed with exit code $LASTEXITCODE."
+        throw (
+            "ollama create failed with exit code $LASTEXITCODE. " +
+            "On Windows, if the user profile contains non-ASCII characters, " +
+            "set OLLAMA_MODELS to an ASCII-only absolute directory and fully " +
+            "restart Ollama before retrying."
+        )
     }
 
     Write-Host "registration_status=REGISTERED model=$ModelName"

@@ -18,7 +18,7 @@ class SettingsTests(unittest.TestCase):
             settings = Settings(_env_file=None)
 
         self.assertEqual(settings.app_name, "MindBridge Learn")
-        self.assertEqual(settings.app_version, "0.8.0")
+        self.assertEqual(settings.app_version, "0.9.0")
         self.assertEqual(settings.environment, "development")
         self.assertEqual(settings.log_level, "INFO")
         self.assertEqual(settings.server_port, 8000)
