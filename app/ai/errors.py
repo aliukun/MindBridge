@@ -30,5 +30,9 @@ class AiRateLimitError(AiProviderError):
     """Provider 拒绝了超过限额的请求。"""
 
 
+class AiResponseError(AiProviderError):
+    """Provider 返回了无法进一步分类的非成功 HTTP 状态。"""
+
+
 class AiProtocolError(AiProviderError):
     """Provider 返回了不符合契约的数据。"""

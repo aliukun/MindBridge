@@ -4,7 +4,7 @@
 >
 > 目标不是逐文件照抄最终版，而是保留学习版已有的更好设计，吸收最终版中真正重要的技术链路，并把每个大问题拆成适合初学者编码、测试和提交 GitHub 的小阶段。
 >
-> v0.7.0 的代码、测试、离线 Mock 手工验收和文档同步已于 2026-07-19 完成。当前共有 96 个测试，综合分支覆盖率为 93%；本阶段没有复制模型、安装 Ollama、接入聊天路由或改变数据库 Schema，Codex 也没有执行暂存、提交、打标签或推送。
+> v0.8.0 的真实 Provider、模型资产 readiness、管理员状态接口、Windows 脚本、测试和文档同步已完成。当前共有 132 个测试，综合分支覆盖率为 92%；真实聊天业务仍未调用 Provider，本阶段没有复制 GGUF、安装或启动 Ollama，也没有改变数据库 Schema。
 
 ## 一、如何使用这份计划
 
@@ -417,7 +417,23 @@ Git 里程碑：
 
 ### v0.8.0：真实 Provider 与本地微调模型资产
 
-状态：待开发
+状态：已完成
+
+实际完成内容：
+
+- `httpx==0.28.1` 已从仅开发依赖移动到运行时依赖。
+- 配置严格支持 `mock`、`ollama` 和 `openai_compatible`，并加入 connect、read 与 total 三类超时。
+- OpenAI-compatible API key 使用 SecretStr；只有显式选中该 Provider 时才要求 base URL、key 和 model。
+- 新增统一安全 HTTP 状态、网络错误、JSON、SSE 与 finish reason 解析。
+- 新增 Ollama `/api/chat` 非流式调用与 NDJSON 流式解析，并通过 `/api/tags` 检查服务和模型注册。
+- 新增 OpenAI-compatible `/chat/completions` 非流式与 SSE 调用，并通过 `/models/{model}` 检查状态。
+- 所有真实 Provider 复用 lifespan 中的一个 AsyncClient；应用启动不探测外部服务，关闭时统一释放连接池。
+- 本地模型状态明确拆分为 asset、server、registration 和 inference 四层；默认不执行推理。
+- 新增管理员专用 `GET /api/admin/ai/status`，学生无法访问，响应不包含 API key、绝对路径和第三方正文。
+- 新增模型 README、Modelfile、检查脚本与支持 `-WhatIf`/`-Confirm` 的显式注册脚本；脚本不安装、不启动、不下载、不复制模型。
+- 自动测试全部使用 MockTransport，不依赖 Ollama、GGUF、远程 API 或公网。
+- 完整质量链通过：132 个测试全部通过，综合分支覆盖率 92%，61 个 Python 文件格式正确，38 个应用源文件通过 mypy。
+- 本阶段没有改变 ORM 或数据库 Schema，不需要重建 SQLite。
 
 前置条件：
 
@@ -448,7 +464,9 @@ Python 不直接 import 或加载 4.68 GB GGUF。
    - ai_max_tokens
    - AiRequest、AiCompletion、AiStreamChunk 和 ProviderStatus
 3. 新增真实网络 Provider 专属配置：
-   - ai_timeout_seconds
+   - ai_connect_timeout_seconds
+   - ai_read_timeout_seconds
+   - ai_total_timeout_seconds
    - ollama_base_url
    - ollama_model
    - openai_compatible_base_url
@@ -473,8 +491,8 @@ Python 不直接 import 或加载 4.68 GB GGUF。
    - 非流式响应
    - data: 流式事件解析
    - 401、404、429、超时和错误 JSON 映射
-11. 将 AsyncClient 作为可注入依赖，测试时使用 httpx.MockTransport；真实客户端的创建和关闭进入 lifespan，不在 Provider 方法中反复创建。
-12. 新增管理员模型状态接口；不向学生暴露绝对磁盘路径和密钥。
+11. 将 AsyncClient 作为可注入依赖，测试时使用 httpx.MockTransport；真实客户端的创建和关闭进入 lifespan，不在 Provider 方法中反复创建。应用启动只组装对象，不自动探测服务或执行推理。
+12. 新增管理员模型状态接口；默认 GET 只检查资产、服务与注册，只有显式 `run_inference=true` 才执行固定最小 prompt；不向学生暴露绝对磁盘路径和密钥。
 13. 新增 scripts/check_local_model.ps1，只做检查。
 14. 新增 scripts/register_local_model.ps1，显式调用 ollama create。
 15. 脚本不得自动安装 Ollama、自动下载模型或在应用启动时自动注册模型。
@@ -522,6 +540,7 @@ Git 里程碑：
 前置条件：
 
 - v0.8.0 的 Mock、Ollama 和 OpenAI-compatible 契约一致。
+- v0.9.0 通过 FastAPI dependency 注入 v0.8.0 已组装的 AiProvider 与默认 AiRequestOptions；TurnService 不读取 request.app.state，不新建 AsyncClient，也不直接构造具体 Provider。
 
 阶段目标：
 
@@ -1863,15 +1882,17 @@ tag 只在完整验收通过后创建。
 
 ## 十一、当前下一步
 
-v0.7.0 已完成 AI 内部契约、异常层级、Provider Protocol、确定性 Mock、严格工厂、应用组装和完整质量验收。
+v0.8.0 已完成真实 Provider、共享 HTTP 生命周期、稳定错误映射、本地模型四层 readiness、管理员状态接口、Windows 脚本和完整质量验收。
 
-当前质量基线为 96 个测试全部通过、综合分支覆盖率 93%；聊天 API 仍未调用 Provider，数据库 Schema 没有变化。
+当前质量基线为 132 个测试全部通过、综合分支覆盖率 92%；聊天 API 仍未调用 Provider，数据库 Schema 没有变化。GGUF 可以以后由开发者本人迁移；在资产、服务、注册与最小推理全部确认前始终保持 `AI_PROVIDER=mock`。
 
-下一阶段是 v0.8.0：真实 Provider 与本地微调模型资产。v0.8.0 将复用 v0.7.0 的通用契约和 AI_PROVIDER、AI_TEMPERATURE、AI_MAX_TOKENS，只新增 httpx 运行时依赖、网络超时、Ollama/OpenAI-compatible 配置、真实适配器和模型 readiness。
+下一阶段是 v0.9.0：隐私边界、AI 风险合并与非流式单轮闭环。开发顺序保持为：
 
-本地微调模型迁移安排在 v0.8.0：
-
-- 现在不复制。
-- 到该阶段先完成目录、忽略规则、状态检查和 MockTransport 测试。
-- 然后由开发者本人把最终版根目录 models 中的微调模型目录迁移过来。
-- 应用仍通过 Ollama HTTP 调用，不让 Python 直接加载 GGUF。
+1. 先实现手机号、邮箱、身份证号和可扩展学号的确定性脱敏，并证明原始数据库消息不被改写。
+2. 再建立带版本号的意图、风险建议、普通聊天、心理支持和高风险安全 prompt。
+3. 实现严格 JSON 提取与 Pydantic 解析，所有超时、坏 JSON 和非法枚举都回退硬规则。
+4. 实现 `max(hard_rule_risk, model_suggested_risk)`，模型永远不能降低硬规则风险。
+5. 实现无需 Provider 的确定性 HIGH 安全回复。
+6. 用 TurnService 把保存用户消息、模型网络调用、报告升级和保存助手消息拆成短事务。
+7. 通过 dependency 注入 v0.8.0 的 AiProvider 和 AiRequestOptions；TurnService 不接触 FastAPI app.state，也不创建客户端。
+8. 最后增加非流式 turns API 与完整故障降级测试；SSE 继续留在 v0.10.0。

@@ -12,6 +12,8 @@ from pydantic import (
 MAX_AI_MESSAGE_LENGTH = 10_000
 MAX_AI_MESSAGES = 64
 MAX_AI_TOKENS = 4096
+MAX_AI_COMPLETION_LENGTH = 50_000
+MAX_AI_STREAM_DELTA_LENGTH = 10_000
 
 
 class AiRole(StrEnum):
@@ -35,6 +37,7 @@ class ProviderState(StrEnum):
     READY = "READY"
     UNAVAILABLE = "UNAVAILABLE"
     MISCONFIGURED = "MISCONFIGURED"
+    MODEL_NOT_FOUND = "MODEL_NOT_FOUND"
 
 
 class AiMessage(BaseModel):
@@ -108,6 +111,7 @@ class AiCompletion(BaseModel):
 
     text: str = Field(
         min_length=1,
+        max_length=MAX_AI_COMPLETION_LENGTH,
     )
     provider: str = Field(
         min_length=1,
@@ -143,7 +147,10 @@ class AiStreamChunk(BaseModel):
         ge=0,
         strict=True,
     )
-    delta: str = ""
+    delta: str = Field(
+        default="",
+        max_length=MAX_AI_STREAM_DELTA_LENGTH,
+    )
     done: bool = False
     finish_reason: AiFinishReason | None = None
 

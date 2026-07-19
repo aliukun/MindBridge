@@ -56,7 +56,7 @@ class HealthEndpointTests(unittest.TestCase):
 
         self.assertEqual(
             body["version"],
-            "0.7.0",
+            "0.8.0",
         )
 
         self.assertEqual(

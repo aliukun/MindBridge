@@ -8,6 +8,7 @@ from app.ai.errors import (
     AiProtocolError,
     AiProviderError,
     AiRateLimitError,
+    AiResponseError,
     AiTimeoutError,
     AiUnavailableError,
 )
@@ -21,6 +22,7 @@ class AiErrorTests(unittest.TestCase):
             AiAuthenticationError("authentication"),
             AiModelNotFoundError("model"),
             AiRateLimitError("rate-limit"),
+            AiResponseError("response"),
             AiProtocolError("protocol"),
         )
 

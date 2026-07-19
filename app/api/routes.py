@@ -1,14 +1,23 @@
 from typing import Annotated
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_user, require_admin
-from app.core.config import get_settings
+from app.ai.providers.base import AiProvider
+from app.api.dependencies import (
+    get_ai_provider,
+    get_application_settings,
+    get_current_user,
+    get_http_client,
+    require_admin,
+)
+from app.core.config import Settings, get_settings
 from app.core.database import get_db
 from app.core.errors import AppError, ErrorCode
 from app.models.entities import UserAccount
+from app.schemas.ai import AiStatusPublic, LocalModelReadinessPublic
 from app.schemas.chat import (
     ChatHistoryPublic,
     ChatMessageCreate,
@@ -23,6 +32,7 @@ from app.services.chat_service import (
     get_chat_history,
 )
 from app.services.message_service import process_user_message
+from app.services.model_assets import inspect_local_model_readiness
 
 router = APIRouter()
 
@@ -69,6 +79,46 @@ def admin_ping(
         "status": "ADMIN_OK",
         "username": current_admin.username,
     }
+
+
+@router.get(
+    "/api/admin/ai/status",
+    response_model=AiStatusPublic,
+)
+async def read_ai_status(
+    current_admin: Annotated[
+        UserAccount,
+        Depends(require_admin),
+    ],
+    provider: Annotated[
+        AiProvider,
+        Depends(get_ai_provider),
+    ],
+    http_client: Annotated[
+        httpx.AsyncClient,
+        Depends(get_http_client),
+    ],
+    settings: Annotated[
+        Settings,
+        Depends(get_application_settings),
+    ],
+    run_inference: bool = False,
+) -> AiStatusPublic:
+    """向管理员返回脱敏的 Provider 与本地模型分层状态。"""
+
+    _ = current_admin
+
+    active_provider_status = await provider.status()
+    local_model_status = await inspect_local_model_readiness(
+        settings,
+        http_client=http_client,
+        run_inference=run_inference,
+    )
+
+    return AiStatusPublic(
+        active_provider=active_provider_status,
+        local_model=LocalModelReadinessPublic.model_validate(local_model_status),
+    )
 
 
 @router.post(

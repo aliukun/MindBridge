@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-v0.7.0
+v0.8.0
 
 ## 当前已完成
 
@@ -55,10 +55,15 @@ v0.7.0
 - 离线确定性 Mock Provider
 - 严格 Provider Factory
 - 应用组装层中的 Provider 与默认请求选项
+- Ollama 非流式与 NDJSON 流式 Provider
+- OpenAI-compatible 非流式与 SSE 流式 Provider
+- 共享 httpx.AsyncClient 生命周期与三层超时
+- 稳定的真实 Provider 网络和协议异常映射
+- 本地模型四层 readiness 与管理员状态接口
+- Windows 模型检查与显式注册脚本
 
 ## 尚未实现
 
-- 真实 Ollama 和 OpenAI-compatible 模型调用
 - AI 与硬规则风险结果合并
 - 高风险安全回复
 - SSE 流式聊天
@@ -136,6 +141,15 @@ GET /api/chat/sessions/{session_public_id}/messages
 
 当前没有公开的风险评估接口或报告查询接口。
 
+管理员 AI 与本地模型状态：
+
+```text
+GET /api/admin/ai/status
+GET /api/admin/ai/status?run_inference=true
+```
+
+第二种形式会显式执行一次不包含用户数据的最小 Ollama 推理；默认状态请求不会执行推理。
+
 风险等级、命中信号和报告摘要不会出现在学生消息响应中。
 
 ## 测试
@@ -165,37 +179,60 @@ powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1
 任意一步失败，脚本都会立即停止并返回非零退出码。GitHub Actions 在
 Python 3.12 环境中调用同一个脚本，避免本地检查与 CI 使用不同标准。
 
-当前 v0.7.0 质量基线：
+当前 v0.8.0 质量基线：
 
-- 96 个自动化测试全部通过
-- 综合分支覆盖率为 93%，高于 90% 门槛
-- 50 个 Python 文件通过 Ruff 格式检查
-- 32 个应用源文件通过 mypy
+- 132 个自动化测试全部通过
+- 综合分支覆盖率为 92%，高于 90% 门槛
+- 61 个 Python 文件通过 Ruff 格式检查
+- 38 个应用源文件通过 mypy
 
 ## 当前 AI Provider 边界
 
-v0.7.0 只实现离线确定性 Mock Provider。
+v0.8.0 支持 `mock`、`ollama` 和 `openai_compatible` 三种显式 Provider。
+未知名称会拒绝启动，绝不静默回退 Mock。默认仍是完全离线、确定性的 Mock；
+现有聊天 API 仍未调用 Provider，隐私脱敏、风险合并和安全单轮闭环属于 v0.9.0。
 
-它不会访问 Ollama、OpenAI API、网络、模型文件或数据库。相同的规范化请求会
-经过稳定 JSON 序列化和 SHA-256 摘要生成相同结果；流式输出按固定大小切分，
-全部增量可以重新拼成非流式结果，并且只产生一个明确的终止块。
+应用在 lifespan 中创建一个共享 `httpx.AsyncClient`，所有真实 Provider 只借用
+这个客户端；应用退出时统一关闭连接池。HTTPX 的 connect/read/write/pool
+分阶段超时与 `asyncio.timeout` 的整次调用总时限分别配置。当前流式总时限包含
+消费者处理增量的时间，进入 HTTP SSE 阶段时会再次评估慢客户端与取消传播。
 
-当前 AI 层已经定义：
-
-- AiMessage、AiRequestOptions 和 AiRequest 请求契约
-- AiCompletion、AiStreamChunk 和 ProviderStatus 响应契约
-- system、user、assistant 内部角色边界
-- AiError、AiConfigurationError 和 AiProviderError 异常层级
-- complete、stream 和 status Provider Protocol
-- 未知 Provider 拒绝启动且不静默回退 Mock 的严格工厂
-- 应用组装层中的 Provider 和不可变默认请求选项
-
-Mock 的作用是验证请求、响应、流式块、异常、工厂和依赖注入边界，不代表真实
-心理支持回复质量。当前聊天 API 尚未调用 Provider；真实 Ollama 和
-OpenAI-compatible Provider 将在 v0.8.0 实现，安全聊天闭环将在 v0.9.0 实现。
+OpenAI-compatible 适配器采用 Chat Completions 形状，因为它是最终版和多种兼容
+服务的共同协议。OpenAI 官方当前建议 OpenAI 原生新项目优先考虑 Responses API；
+本学习版没有默认远程模型，只有显式配置 base URL、SecretStr API key 和 model
+后才能选择这个 Provider。
 
 AI 的 system 消息只属于模型上下文，不会写入当前只允许 user 和 assistant 的
 聊天消息表。Provider 状态、内部 prompt 和模型错误也不会通过学生接口外显。
+
+## 本地模型与 Ollama readiness
+
+根目录 `models` 保存 AI 模型资产，和保存 SQLAlchemy 代码的 `app/models` 不是
+同一个目录。仓库只提交 `README.md` 与 `Modelfile`；GGUF、safetensors、bin、pt、
+pth 和模型压缩包均被忽略。
+
+状态按四层报告，不能把“文件存在”误认为“模型可用”：
+
+1. `asset_status`：GGUF 与 Modelfile 是否同时存在，FROM 是否匹配。
+2. `server_status`：Ollama `/api/tags` 是否可达并返回有效数据。
+3. `registration_status`：目标模型是否已注册。
+4. `inference_status`：只有管理员显式请求时才运行固定最小 prompt。
+
+模型文件尚未迁移时保持 `AI_PROVIDER=mock`。检查与注册脚本不会安装或启动
+Ollama，不会下载、复制或提交 GGUF：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check_local_model.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\register_local_model.ps1 -WhatIf
+```
+
+迁移 GGUF 后可选择校验已知 SHA-256，再由开发者本人确认注册：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check_local_model.ps1 -VerifyChecksum
+powershell -ExecutionPolicy Bypass -File .\scripts\register_local_model.ps1 -VerifyChecksum -Confirm
+powershell -ExecutionPolicy Bypass -File .\scripts\check_local_model.ps1 -RunInference
+```
 
 ## 当前数据库
 

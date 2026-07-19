@@ -3,6 +3,7 @@ import unittest
 from pydantic import ValidationError
 
 from app.ai.contracts import (
+    MAX_AI_COMPLETION_LENGTH,
     MAX_AI_MESSAGES,
     MAX_AI_TOKENS,
     AiCompletion,
@@ -12,6 +13,7 @@ from app.ai.contracts import (
     AiRequestOptions,
     AiRole,
     AiStreamChunk,
+    ProviderState,
 )
 
 
@@ -155,6 +157,20 @@ class AiContractTests(unittest.TestCase):
                 model="mock-model",
                 finish_reason=AiFinishReason.STOP,
             )
+
+        with self.assertRaises(ValidationError):
+            AiCompletion(
+                text="x" * (MAX_AI_COMPLETION_LENGTH + 1),
+                provider="mock",
+                model="mock-model",
+                finish_reason=AiFinishReason.STOP,
+            )
+
+    def test_provider_state_distinguishes_missing_model(self):
+        self.assertEqual(
+            ProviderState.MODEL_NOT_FOUND.value,
+            "MODEL_NOT_FOUND",
+        )
 
     def test_stream_chunk_enforces_terminal_state(self):
         data_chunk = AiStreamChunk(

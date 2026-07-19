@@ -36,6 +36,12 @@ uploads/
 *.gguf
 *.safetensors
 *.bin
+*.pt
+*.pth
+models/**/*.zip
+models/**/*.7z
+models/**/*.tar
+models/**/*.tar.gz
 
 # IDE and operating system
 .idea/
